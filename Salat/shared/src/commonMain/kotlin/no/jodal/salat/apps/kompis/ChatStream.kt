@@ -3,6 +3,7 @@ package no.jodal.salat.apps.kompis
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -22,6 +23,8 @@ import kotlinx.serialization.json.putJsonObject
 internal data class ChatChunk(
     /** Ny tekst i svaret, eller tom. */
     val content: String,
+    /** Ny bit av argumentene til verktøykallet, eller tom. */
+    val toolArguments: String,
     val provider: String?,
     /** Forbruk og pris, i den siste hendelsen. */
     val usage: JsonObject?,
@@ -38,8 +41,12 @@ internal fun parseChatChunk(dataJson: String): ChatChunk? {
         it.jsonObjectOrNull()?.string("message") ?: "OpenRouter ga en feil midt i svaret."
     }
     val choice = (event["choices"] as? JsonArray)?.firstOrNull()?.jsonObjectOrNull()
-    val content = choice?.get("delta")?.jsonObjectOrNull()?.string("content").orEmpty()
-    return ChatChunk(content, event.string("provider"), event["usage"]?.jsonObjectOrNull(), error)
+    val delta = choice?.get("delta")?.jsonObjectOrNull()
+    val content = delta?.string("content").orEmpty()
+    val toolArguments = (delta?.get("tool_calls") as? JsonArray)
+        ?.joinToString("") { it.jsonObjectOrNull()?.get("function")?.jsonObjectOrNull()?.string("arguments").orEmpty() }
+        .orEmpty()
+    return ChatChunk(content, toolArguments, event.string("provider"), event["usage"]?.jsonObjectOrNull(), error)
 }
 
 internal fun JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject
@@ -60,6 +67,7 @@ internal object LlmRequest {
         model: OpenRouterModel?,
         prompt: String,
         messages: List<Pair<Role, String>>,
+        tools: Boolean = true,
     ): String = buildJsonObject {
         put("model", modelId)
         put("stream", true)
@@ -86,6 +94,13 @@ internal object LlmRequest {
             reasoning.supportsNone -> putJsonObject("reasoning") { put("effort", "none") }
             else -> putJsonObject("reasoning") { put("enabled", false) }
         }
+        if (tools) {
+            putJsonArray("tools") { addJsonObject { sayTool() } }
+            putJsonObject("tool_choice") {
+                put("type", "function")
+                putJsonObject("function") { put("name", "say") }
+            }
+        }
         if (providers.isNotEmpty()) {
             putJsonObject("provider") {
                 putJsonArray("order") { providers.forEach { add(it) } }
@@ -93,4 +108,51 @@ internal object LlmRequest {
             }
         }
     }.toString()
+}
+
+/**
+ * Verktøyet Kompis svarer med. Feltene står i den rekkefølgen modellen skriver dem: først hva den tror
+ * brukeren sa, så er det lettere å svare på det brukeren mente og ikke på det som ble hørt feil.
+ */
+private fun JsonObjectBuilder.sayTool() {
+    put("type", "function")
+    putJsonObject("function") {
+        put("name", "say")
+        put("description", "Si noe høyt til brukeren. Dette er den eneste måten du svarer på.")
+        putJsonObject("parameters") {
+            put("type", "object")
+            putJsonObject("properties") {
+                putJsonObject("understood") {
+                    put("type", "string")
+                    put(
+                        "description",
+                        "Hva brukeren mest sannsynlig sa, skrevet riktig. Talegjenkjenningen kan ha hørt norsk som svensk eller dansk " +
+                            "eller hørt ord feil. Rett det opp. Bare det brukeren mente, uten kommentarer.",
+                    )
+                }
+                putJsonObject("language") {
+                    put("type", "string")
+                    putJsonArray("enum") {
+                        add("no")
+                        add("en")
+                        add("es")
+                    }
+                    put("description", "Språket du svarer på.")
+                }
+                putJsonObject("style") {
+                    put("type", "string")
+                    put("description", "Valgfritt: kort regi for stemmen, for eksempel «varm og rolig». Tomt når vanlig tone passer.")
+                }
+                putJsonObject("text") {
+                    put("type", "string")
+                    put("description", "Det som skal sies høyt, som ren tekst slik det skal høres.")
+                }
+            }
+            putJsonArray("required") {
+                add("understood")
+                add("language")
+                add("text")
+            }
+        }
+    }
 }

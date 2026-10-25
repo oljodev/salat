@@ -194,7 +194,7 @@ class SttTestTest {
         test.stopRecording()
         test.onTranscribed("""{"text":"Hei"}""", 1.0, 32_000, 300)
         assertNull(bridge.sttResendConfig)
-        assertEquals("Modellen sa ikke hvilket språk den hørte", test.results.single().note)
+        assertEquals("voxtral-mini-transcribe-3-0 oppgir ikke språket, så auto kan ikke begrenses med denne modellen", test.results.single().note)
     }
 
     @Test

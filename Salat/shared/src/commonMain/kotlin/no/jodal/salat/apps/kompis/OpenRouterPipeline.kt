@@ -55,7 +55,9 @@ class OpenRouterPipeline(
     /** Samtalen så langt, som språkmodellen får den. */
     private val turns = mutableListOf<Pair<Role, String>>()
 
-    // Svaret som kommer nå.
+    // Svaret som kommer nå. [buffer] er det som skal sies, men ikke er en hel setning ennå.
+    private var stream = SayStream()
+    private var understoodHandled = false
     private val buffer = StringBuilder()
     private val sentences = mutableListOf<String>()
     private var startedSentences = 0
@@ -179,6 +181,8 @@ class OpenRouterPipeline(
     private fun answer() {
         phase = Phase.Thinking
         host.onStatus("thinking")
+        stream = SayStream()
+        understoodHandled = false
         buffer.clear()
         sentences.clear()
         startedSentences = 0
@@ -205,8 +209,11 @@ class OpenRouterPipeline(
                 abort(chunk.error)
                 return
             }
-            if (chunk.content.isEmpty()) return
-            buffer.append(chunk.content)
+            // Modellen svarer med verktøyet say: først hva den tror du sa, så språket, og så det som skal sies.
+            val added = stream.add(chunk)
+            useUnderstood()
+            if (added.isEmpty()) return
+            buffer.append(added)
             val (complete, rest) = Sentences.split(buffer.toString())
             complete.forEach { enqueue(it) }
             var remaining = rest
@@ -239,6 +246,20 @@ class OpenRouterPipeline(
 
     // Tekst til tale.
 
+    /**
+     * Modellen skrev hva den tror brukeren sa, med feilhørte ord rettet. Det brukes i minnet i stedet
+     * for det som ble hørt, så «tusen tack» ikke blir stående der som svensk.
+     */
+    private fun useUnderstood() {
+        val understood = stream.understood ?: return
+        if (understoodHandled) return
+        understoodHandled = true
+        val index = turns.indexOfLast { it.first == Role.User }
+        if (index < 0 || turns[index].second == understood) return
+        host.onDebug("Forstod: $understood  (hørt som: ${turns[index].second})")
+        turns[index] = Role.User to understood
+    }
+
     /** Sender [raw] til stemmen, hvis det er noe å lese. */
     private fun enqueue(raw: String) {
         val text = Sentences.speakable(raw)
@@ -249,17 +270,26 @@ class OpenRouterPipeline(
         bridge.speechEnqueue(id, store.openRouterKey, speechBody(text))
     }
 
+    /** Forespørselen til stemmen, med språket og regien språkmodellen ga. */
     private fun speechBody(text: String): String = buildJsonObject {
         put("model", settings.ttsModel)
         put("input", text)
-        voice()?.let { put("voice", it) }
-        settings.ttsInstructions.trim().takeIf { it.isNotEmpty() }?.let { put("instructions", it) }
+        voice(stream.language)?.let { put("voice", it) }
+        listOfNotNull(settings.ttsInstructions.trim().ifEmpty { null }, stream.style)
+            .takeIf { it.isNotEmpty() }
+            ?.let { put("instructions", it.joinToString(". ")) }
         put("response_format", "pcm")
     }.toString()
 
-    /** Stemmen som er valgt for modellen, ellers den første, de norske først. */
-    private fun voice(): String? = settings.ttsVoices[settings.ttsModel]
-        ?: ModelCache.tts.firstOrNull { it.id == settings.ttsModel }?.voices?.sortedBy { !isNorwegianVoice(it) }?.firstOrNull()
+    /**
+     * Stemmen som er valgt for modellen, ellers den første, de norske først. Svarer Kompis på engelsk
+     * eller spansk, og modellen har en stemme til språket, brukes den.
+     */
+    private fun voice(language: String?): String? {
+        val voices = ModelCache.tts.firstOrNull { it.id == settings.ttsModel }?.voices.orEmpty().sortedBy { !isNorwegianVoice(it) }
+        val selected = settings.ttsVoices[settings.ttsModel] ?: voices.firstOrNull()
+        return VoiceChoice.pick(voices, selected, language)
+    }
 
     private val speech = object : SpeechListener {
         override fun onFirstAudio(id: String, millis: Long) {

@@ -237,7 +237,7 @@ class SttTest(
                 uploadBytes = uploadBytes,
                 millis = if (retriedAs != null) clock() - releasedAt else millis,
                 costUsd = response.usage?.cost,
-                note = languageNote(sentLanguage, OpenRouter.parseDetectedLanguage(responseJson)),
+                note = languageNote(sentLanguage, sentModel, OpenRouter.parseDetectedLanguage(responseJson)),
             ),
         ) + results
     }
@@ -251,13 +251,13 @@ class SttTest(
     }
 
     /** Forklarer språkvalget når modellen fant språket selv. */
-    private fun languageNote(language: SttLanguage, heard: String?): String? {
+    private fun languageNote(language: SttLanguage, model: String, heard: String?): String? {
         val retry = retriedAs
         return when {
             language.allowed == null -> null
             retry != null -> "Oppdaget ${detected?.let(OpenRouter::languageName) ?: "et annet språk"}, prøvde igjen som ${OpenRouter.languageName(retry)}"
             heard != null -> "Oppdaget ${OpenRouter.languageName(heard)}"
-            else -> "Modellen sa ikke hvilket språk den hørte"
+            else -> "${modelName(model)} oppgir ikke språket, så auto kan ikke begrenses med denne modellen"
         }
     }
 

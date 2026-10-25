@@ -345,6 +345,83 @@ class OpenRouterPipelineTest {
         assertTrue("user Hej" in host.events)
     }
 
+    private fun toolEvent(arguments: String) = chat.onEvent(
+        """{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":${JsonPrimitive(arguments)}}}]}}]}""",
+        300,
+    )
+
+    private fun spokenInput(id: String) = Json.parseToJsonElement(bridge.speechBodies[id]!!).jsonObject["input"]!!.jsonPrimitive.content
+
+    @Test
+    fun theModelAnswersWithTheSayToolAndMisheardWordsAreCorrectedInTheMemory() {
+        openAndGoToListening()
+        say("Tusen tack")
+        val request = lastRequest()
+        assertEquals("say", request["tool_choice"]!!.jsonObject["function"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+
+        toolEvent("""{"understood":"Tusen takk","language":"no",""")
+        assertTrue("debug Forstod: Tusen takk  (hørt som: Tusen tack)" in host.events)
+        toolEvent(""""text":"Bare hyggelig! """)
+        toolEvent("""Hyggelig å høre."}""")
+        chat.onDone(500)
+        assertEquals(setOf("s0", "s1"), bridge.speechBodies.keys)
+        assertEquals("Bare hyggelig!", spokenInput("s0"))
+        assertEquals("Hyggelig å høre.", spokenInput("s1"))
+        assertEquals("finish", bridge.pipelineCalls.last())
+
+        speech.onItemStarted("s0")
+        speech.onItemStarted("s1")
+        speech.onFinished()
+
+        // Minnet har det brukeren mente, så språkmodellen ikke ser «tack» igjen.
+        say("Takk igjen")
+        val messages = lastRequest()["messages"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(
+            listOf("Tusen takk", "Bare hyggelig! Hyggelig å høre.", "Takk igjen"),
+            messages.drop(1).map { it["content"]!!.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun englishAnswersUseAnEnglishVoiceAndTheStyleTheModelGave() {
+        store.update { it.copy(settings = it.settings.copy(ttsInstructions = "rolig")) }
+        ModelCache.tts = listOf(
+            OpenRouterModel(
+                "mistralai/voxtral-mini-tts-3-0", "Mistral: Voxtral TTS 3", 1,
+                voices = listOf("voice_3150", "en_paul_happy", "en_paul_neutral"),
+            ),
+        )
+        openAndGoToListening()
+        say("Can you speak English?")
+        toolEvent("""{"understood":"Can you speak English?","language":"en","style":"varm","text":"Sure! I can."}""")
+        chat.onDone(400)
+
+        val first = Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject
+        assertEquals("Sure!", first["input"]!!.jsonPrimitive.content)
+        assertEquals("en_paul_neutral", first["voice"]!!.jsonPrimitive.content)
+        assertEquals("rolig. varm", first["instructions"]!!.jsonPrimitive.content)
+
+        // På norsk brukes stemmen som er valgt, uten regi fra modellen.
+        speech.onFinished()
+        say("Takk")
+        bridge.speechBodies.clear()
+        toolEvent("""{"understood":"Takk","language":"no","text":"Bare hyggelig"}""")
+        chat.onDone(400)
+        val norwegian = Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject
+        assertEquals("Bare hyggelig", norwegian["input"]!!.jsonPrimitive.content)
+        assertEquals("voice_3150", norwegian["voice"]!!.jsonPrimitive.content)
+        assertEquals("rolig", norwegian["instructions"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun plainTextAnswersStillWork() {
+        openAndGoToListening()
+        say("Hei")
+        chunk("Hei på deg. ")
+        assertEquals("Hei på deg.", spokenInput("s0"))
+        assertTrue(host.events.none { it.startsWith("debug") })
+    }
+
     @Test
     fun formatsTheTimings() {
         assertEquals(

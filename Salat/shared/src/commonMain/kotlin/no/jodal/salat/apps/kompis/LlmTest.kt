@@ -29,6 +29,12 @@ data class LlmStats(
     val completionTokens: Int?,
     val reasoningTokens: Int?,
     val costUsd: Double?,
+    /** Hva modellen tror du sa, når den svarte med verktøyet. */
+    val understood: String? = null,
+    /** Språket modellen svarte på. */
+    val language: String? = null,
+    /** Regien modellen ga stemmen. */
+    val style: String? = null,
 ) {
     /** Hvor mange tokens i sekundet som kom etter det første. */
     val tokensPerSecond: Int?
@@ -82,7 +88,7 @@ class LlmTest(
     fun modelName(id: String): String = models.firstOrNull { it.id == id }?.shortName ?: id.substringAfter('/')
 
     // Det som måles mens et svar strømmer.
-    private var answer = StringBuilder()
+    private var stream = SayStream()
     private var sentModelName = ""
     private var provider: String? = null
     private var firstTokenMillis: Long? = null
@@ -150,7 +156,7 @@ class LlmTest(
         }
         message = null
         messages = messages + LlmMessage(Role.User, trimmed)
-        answer = StringBuilder()
+        stream = SayStream()
         sentModelName = modelName(modelId)
         provider = null
         firstTokenMillis = null
@@ -163,7 +169,7 @@ class LlmTest(
     /** Stopper svaret. Det som er kommet så langt, blir stående uten målinger. */
     fun stop() {
         bridge.openRouterCancelChat()
-        val partial = answer.toString().trim()
+        val partial = stream.text.trim()
         if (partial.isNotEmpty()) messages = messages + LlmMessage(Role.Kompis, partial)
         draft = null
     }
@@ -196,17 +202,16 @@ class LlmTest(
         chunk.provider?.let { provider = it }
         chunk.usage?.let { usage = it }
 
-        val content = chunk.content
-        if (content.isEmpty()) return
+        // Modellen svarer med verktøyet say, eller med vanlig tekst. Her er det bare det som skal sies.
+        if (stream.add(chunk).isEmpty()) return
         if (firstTokenMillis == null) firstTokenMillis = millis
-        answer.append(content)
-        if (firstSentenceMillis == null && Sentences.hasComplete(answer.toString())) firstSentenceMillis = millis
-        draft = answer.toString().trimStart()
+        if (firstSentenceMillis == null && Sentences.hasComplete(stream.text)) firstSentenceMillis = millis
+        draft = stream.text.trimStart()
     }
 
     override fun onDone(millis: Long) {
         if (!isStreaming) return
-        val text = answer.toString().trim()
+        val text = stream.text.trim()
         val usage = usage
         val stats = LlmStats(
             modelName = sentModelName,
@@ -220,6 +225,9 @@ class LlmTest(
             completionTokens = usage?.int("completion_tokens"),
             reasoningTokens = usage?.get("completion_tokens_details")?.jsonObjectOrNull()?.int("reasoning_tokens"),
             costUsd = usage?.get("cost")?.let { (it as? JsonPrimitive)?.doubleOrNull },
+            understood = stream.understood,
+            language = stream.language,
+            style = stream.style,
         )
         messages = messages + LlmMessage(Role.Kompis, text.ifEmpty { "(tomt svar)" }, stats)
         draft = null

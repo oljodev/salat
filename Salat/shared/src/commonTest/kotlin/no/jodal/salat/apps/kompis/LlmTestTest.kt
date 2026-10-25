@@ -9,6 +9,7 @@ import kotlin.test.assertTrue
 import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -81,6 +82,44 @@ class LlmTestTest {
     }
 
     private fun solidRate(tokens: Int, millis: Long) = (tokens / (millis / 1000.0)).toInt()
+
+    private fun toolEvent(arguments: String, millis: Long) = test.onEvent(
+        """{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":${JsonPrimitive(arguments)}}}]}}]}""",
+        millis,
+    )
+
+    @Test
+    fun asksForTheSayToolFirstWritingWhatItUnderstood() {
+        test.send("Tusen tack")
+        val body = sentBody()
+        assertEquals("""{"type":"function","function":{"name":"say"}}""", body["tool_choice"].toString())
+        val tool = body["tools"]!!.jsonArray.single().jsonObject["function"]!!.jsonObject
+        assertEquals("say", tool["name"]!!.jsonPrimitive.content)
+        val parameters = tool["parameters"]!!.jsonObject
+        assertEquals(listOf("understood", "language", "style", "text"), parameters["properties"]!!.jsonObject.keys.toList())
+        assertEquals(listOf("understood", "language", "text"), parameters["required"]!!.jsonArray.map { it.jsonPrimitive.content })
+    }
+
+    @Test
+    fun showsWhatTheModelUnderstoodWhenItAnswersWithTheTool() {
+        test.send("Tusen tack")
+        test.onEvent("""{"provider":"Wafer","choices":[{"delta":{"role":"assistant","content":""}}]}""", 100)
+        toolEvent("""{"understood":"Tusen takk","language":"no",""", 150)
+        assertEquals("", test.draft, "ingenting skal sies ennå")
+        toolEvent(""""text":"Bare hy""", 220)
+        assertEquals("Bare hy", test.draft)
+        toolEvent("""ggelig! Og du?"}""", 260)
+        test.onDone(300)
+
+        val answer = test.messages.last()
+        assertEquals("Bare hyggelig! Og du?", answer.text)
+        val stats = answer.stats!!
+        assertEquals("Tusen takk", stats.understood)
+        assertEquals("no", stats.language)
+        assertNull(stats.style)
+        assertEquals(220L, stats.firstTokenMillis, "første ord, ikke første token")
+        assertEquals(260L, stats.firstSentenceMillis)
+    }
 
     @Test
     fun sendsTheWholeConversation() {

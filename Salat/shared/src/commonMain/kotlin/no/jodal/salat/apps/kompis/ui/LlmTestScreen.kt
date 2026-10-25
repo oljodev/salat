@@ -60,6 +60,7 @@ import no.jodal.salat.NativeBridge
 import no.jodal.salat.apps.kompis.KompisStore
 import no.jodal.salat.apps.kompis.LlmStats
 import no.jodal.salat.apps.kompis.LlmTest
+import no.jodal.salat.apps.kompis.OpenRouter
 import no.jodal.salat.apps.kompis.Role
 import no.jodal.salat.apps.kompis.formatSeconds
 import no.jodal.salat.apps.kompis.formatUsd
@@ -216,7 +217,7 @@ private fun Providers(test: LlmTest) {
 private fun StatsLine(stats: LlmStats) {
     val colors = MaterialTheme.colorScheme
     val timing = listOfNotNull(
-        stats.firstTokenMillis?.let { "første token $it ms" },
+        stats.firstTokenMillis?.let { "første ord $it ms" },
         stats.firstSentenceMillis?.let { "første setning $it ms" },
         "ferdig ${formatSeconds(stats.totalMillis / 1000.0)}",
     )
@@ -230,7 +231,15 @@ private fun StatsLine(stats: LlmStats) {
         stats.reasoningTokens?.takeIf { it > 0 }?.let { "tenkte $it tokens" },
         stats.costUsd?.let(::formatUsd),
     )
+    val understood = listOfNotNull(
+        stats.understood?.let { "Forstod: «$it»" },
+        stats.language?.let { "svarte på ${OpenRouter.languageName(it)}" },
+        stats.style?.let { "regi: $it" },
+    )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (understood.isNotEmpty()) {
+            Text(understood.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium, color = colors.secondary)
+        }
         Text(timing.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium, color = colors.onSurface)
         Text(details.joinToString("  ·  "), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
     }
