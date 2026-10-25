@@ -60,15 +60,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.rounded.Tune
 import no.jodal.salat.resources.Res
-import no.jodal.salat.resources.kompis_bonne
-import no.jodal.salat.resources.kompis_drope
-import no.jodal.salat.resources.kompis_firkant
-import no.jodal.salat.resources.kompis_hjerte
-import no.jodal.salat.resources.kompis_pille
-import no.jodal.salat.resources.kompis_sky
-import no.jodal.salat.resources.kompis_spokelse
-import no.jodal.salat.resources.kompis_stjerne
-import no.jodal.salat.resources.kompis_trekant
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.runtime.Composable
@@ -94,6 +85,7 @@ import no.jodal.salat.NativeBridge
 import no.jodal.salat.apps.kompis.Conversation
 import no.jodal.salat.apps.kompis.KompisEngine
 import no.jodal.salat.apps.kompis.KompisLive
+import no.jodal.salat.apps.kompis.KompisMascots
 import no.jodal.salat.apps.kompis.KompisStore
 import no.jodal.salat.apps.kompis.Period
 import no.jodal.salat.apps.kompis.formatDuration
@@ -101,19 +93,6 @@ import no.jodal.salat.apps.kompis.formatWhen
 import no.jodal.salat.apps.kompis.periodOf
 import no.jodal.salat.ui.BackButton
 import no.jodal.salat.ui.LocalDarkTheme
-
-/** Kompis har mange ansikter: en figur velges tilfeldig hver gang Kompis åpnes. */
-private val Mascots = listOf(
-    Res.drawable.kompis_drope,
-    Res.drawable.kompis_sky,
-    Res.drawable.kompis_firkant,
-    Res.drawable.kompis_trekant,
-    Res.drawable.kompis_hjerte,
-    Res.drawable.kompis_stjerne,
-    Res.drawable.kompis_pille,
-    Res.drawable.kompis_spokelse,
-    Res.drawable.kompis_bonne,
-)
 
 private sealed interface KompisDestination {
     data object Home : KompisDestination
@@ -129,7 +108,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
         var destination by remember { mutableStateOf<KompisDestination>(KompisDestination.Home) }
         var showSettings by remember { mutableStateOf(false) }
         var showTranscript by remember { mutableStateOf(false) }
-        val mascot = remember { Mascots.random() }
+        val mascot = KompisMascots.current
 
         // «Snakk med Kompis» fra widgeten eller kontrollsenteret starter en samtale med en gang.
         LaunchedEffect(DeepLinks.pending) {

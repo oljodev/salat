@@ -70,8 +70,13 @@ internal fun PushToTalkControls(state: LiveUiState, onTalkStart: () -> Unit, onT
     ) {
         state.timings?.let { TimingsCard(it) }
         TalkButton(state, onStart = onTalkStart, onStop = onTalkStop)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RouteChip(state.audioRoute)
+        // Avslutt får sin egen bredde først, og lydruten tar resten og kortes ned hvis navnet er langt.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        ) {
+            RouteChip(state.audioRoute, Modifier.weight(1f, fill = false))
             EndButton(onEnd)
         }
     }
@@ -253,11 +258,11 @@ private fun TimingItem(label: String, millis: Long?, modifier: Modifier, highlig
 
 /** Hvor lyden går, f.eks. «AirPods Pro» eller «Høyttaler». */
 @Composable
-private fun RouteChip(route: String) {
+private fun RouteChip(route: String, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
+        modifier = modifier
             .height(48.dp)
             .clip(CircleShape)
             .background(White.copy(alpha = 0.1f))
@@ -269,7 +274,14 @@ private fun RouteChip(route: String) {
             tint = White.copy(alpha = 0.75f),
             modifier = Modifier.size(18.dp),
         )
-        Text(route, style = MaterialTheme.typography.labelLarge, color = White.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            route,
+            style = MaterialTheme.typography.labelLarge,
+            color = White.copy(alpha = 0.85f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
     }
 }
 

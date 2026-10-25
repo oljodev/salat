@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import no.jodal.salat.apps.kompis.Message
@@ -324,7 +325,11 @@ private fun Controls(
                 Text("Avslutt", style = MaterialTheme.typography.titleMedium, color = White)
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 24.dp),
+        ) {
             Icon(
                 if (state.audioRoute.contains("AirPods", ignoreCase = true)) Icons.Rounded.Headphones else Icons.AutoMirrored.Rounded.VolumeUp,
                 contentDescription = null,
@@ -335,6 +340,7 @@ private fun Controls(
                 "${state.audioRoute}  ·  Du kan låse skjermen",
                 style = MaterialTheme.typography.labelMedium,
                 color = White.copy(alpha = 0.55f),
+                textAlign = TextAlign.Center,
             )
         }
     }
