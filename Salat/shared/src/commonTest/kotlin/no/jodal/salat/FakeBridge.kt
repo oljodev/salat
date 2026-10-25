@@ -7,6 +7,8 @@ internal object FakeBridge : NativeBridge {
     var rolledWith: String? = null
     var sttSentWith: String? = null
     val openRouterGets = mutableListOf<String>()
+    var chatSentWith: String? = null
+    var chatCancelled = false
 
     /** Svaret [openRouterGet] gir, eller `null` for å aldri svare. */
     var openRouterResult: Pair<String?, String?>? = null
@@ -43,6 +45,13 @@ internal object FakeBridge : NativeBridge {
         sttSentWith = configJson
     }
     override fun kompisSttClose() = Unit
+    override fun openRouterWarmUp() = Unit
+    override fun openRouterChat(apiKey: String, bodyJson: String, listener: ChatListener) {
+        chatSentWith = bodyJson
+    }
+    override fun openRouterCancelChat() {
+        chatCancelled = true
+    }
     override fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit) {
         openRouterGets += path
         openRouterResult?.let { (body, error) -> onResult(body, error) }

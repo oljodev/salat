@@ -84,6 +84,7 @@ private sealed interface KompisDestination {
     data class Chat(val id: String) : KompisDestination
     data class Live(val conversationId: String?) : KompisDestination
     data object SttTest : KompisDestination
+    data object LlmTest : KompisDestination
 }
 
 @Composable
@@ -112,7 +113,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                         slideInVertically(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     initialState is KompisDestination.Live ->
                         fadeIn(tween(duration)) togetherWith slideOutVertically(tween(duration)) { it }
-                    targetState is KompisDestination.Chat || targetState is KompisDestination.SttTest ->
+                    targetState is KompisDestination.Chat || targetState is KompisDestination.SttTest || targetState is KompisDestination.LlmTest ->
                         slideInHorizontally(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     else -> fadeIn(tween(duration)) togetherWith slideOutHorizontally(tween(duration)) { it }
                 }
@@ -131,6 +132,13 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                     onOpen = { destination = KompisDestination.Chat(it.id) },
                     onSettings = { showSettings = true },
                     onSttTest = { destination = KompisDestination.SttTest },
+                    onLlmTest = { destination = KompisDestination.LlmTest },
+                )
+                KompisDestination.LlmTest -> LlmTestScreen(
+                    store = store,
+                    bridge = bridge,
+                    onBack = { destination = KompisDestination.Home },
+                    onSettings = { showSettings = true },
                 )
                 KompisDestination.SttTest -> SttTestScreen(
                     store = store,
@@ -205,6 +213,7 @@ fun KompisHome(
     onOpen: (Conversation) -> Unit,
     onSettings: () -> Unit,
     onSttTest: () -> Unit,
+    onLlmTest: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val now = store.nowMillis()
@@ -236,7 +245,12 @@ fun KompisHome(
         if (!store.hasApiKey) {
             item(key = "key") { ApiKeyRow(onClick = onSettings) }
         }
-        item(key = "stt") { SttTestRow(onClick = onSttTest) }
+        item(key = "stt") {
+            TestRow(Icons.Rounded.Mic, "Test tale til tekst", "Prøv modeller fra OpenRouter, og se hvor raskt teksten kommer.", onSttTest)
+        }
+        item(key = "llm") {
+            TestRow(Icons.Rounded.Forum, "Test språkmodell", "Chat med en modell fra OpenRouter, og se hvor raskt svarene kommer.", onLlmTest)
+        }
 
         item(key = "heading") {
             Text(
@@ -399,9 +413,9 @@ private fun ApiKeyRow(onClick: () -> Unit) {
     }
 }
 
-/** Fører til testen av tale til tekst, det første steget mot Kompis med OpenRouter. */
+/** Fører til en av testene på veien mot Kompis med OpenRouter. */
 @Composable
-private fun SttTestRow(onClick: () -> Unit) {
+private fun TestRow(icon: ImageVector, title: String, description: String, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -414,11 +428,11 @@ private fun SttTestRow(onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(16.dp),
     ) {
-        Icon(Icons.Rounded.Mic, contentDescription = null, tint = colors.onSurface)
+        Icon(icon, contentDescription = null, tint = colors.onSurface)
         Column(Modifier.weight(1f)) {
-            Text("Test tale til tekst", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
             Text(
-                "Prøv modeller fra OpenRouter, og se hvor raskt teksten kommer.",
+                description,
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
             )

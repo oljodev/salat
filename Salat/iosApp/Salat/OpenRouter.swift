@@ -48,3 +48,71 @@ enum OpenRouter {
         }
     }
 }
+
+/// Et svar fra `chat/completions` som strømmer. Hver hendelse sendes videre til Kotlin som den er,
+/// med tiden siden forespørselen ble sendt. Det finnes bare ett svar om gangen.
+final class OpenRouterChat {
+    static let shared = OpenRouterChat()
+
+    private var task: Task<Void, Never>?
+    /// Øker for hvert svar, så hendelser fra et stoppet svar ikke slipper gjennom.
+    private var generation = 0
+
+    func start(apiKey: String, bodyJson: String, listener: ChatListener) {
+        cancel()
+        let current = generation
+        var request = URLRequest(url: URL(string: "chat/completions", relativeTo: OpenRouter.baseUrl)!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.httpBody = Data(bodyJson.utf8)
+        let startedAt = Date()
+
+        func report(_ block: @escaping () -> Void) {
+            DispatchQueue.main.async {
+                guard current == self.generation else { return }
+                block()
+            }
+        }
+        func elapsed() -> Int64 {
+            Int64(Date().timeIntervalSince(startedAt) * 1000)
+        }
+
+        task = Task {
+            do {
+                let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                guard status == 200 else {
+                    // Feil før strømmen starter, kommer som vanlig JSON.
+                    var data = Data()
+                    for try await byte in bytes {
+                        data.append(byte)
+                    }
+                    report { listener.onError(message: OpenRouter.errorMessage(status: status, data: data)) }
+                    return
+                }
+                for try await line in bytes.lines {
+                    // Linjer som begynner med kolon er kommentarer som holder forbindelsen åpen.
+                    guard line.hasPrefix("data:") else { continue }
+                    let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                    if payload == "[DONE]" { break }
+                    let millis = elapsed()
+                    report { listener.onEvent(dataJson: payload, millis: millis) }
+                }
+                let millis = elapsed()
+                report { listener.onDone(millis: millis) }
+            } catch {
+                guard !Task.isCancelled else { return }
+                report { listener.onError(message: "Fikk ikke kontakt med OpenRouter: \(error.localizedDescription)") }
+            }
+        }
+    }
+
+    func cancel() {
+        generation += 1
+        task?.cancel()
+        task = nil
+    }
+}

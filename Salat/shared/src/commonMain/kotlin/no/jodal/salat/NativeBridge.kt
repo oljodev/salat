@@ -80,6 +80,18 @@ interface NativeBridge {
      */
     fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit)
 
+    /** Åpner forbindelsen til OpenRouter på forhånd, så neste kall slipper å vente på den. */
+    fun openRouterWarmUp()
+
+    /**
+     * Sender [bodyJson] til `chat/completions` hos OpenRouter med strømming, og gir hver hendelse
+     * til [listener]. Erstatter et svar som allerede strømmer.
+     */
+    fun openRouterChat(apiKey: String, bodyJson: String, listener: ChatListener)
+
+    /** Stopper svaret som strømmer. [ChatListener] får ikke vite mer om det. */
+    fun openRouterCancelChat()
+
     // Ekko. Lyden til hver lyd ligger i en fil som heter det samme som lyden sin id.
 
     /** Henter lyden fra YouTube-videoen [videoId] og lagrer den som [clipId]. */
@@ -160,6 +172,17 @@ interface SttListener {
      * opptaket var, [uploadBytes] hvor mye som ble sendt, og [millis] tiden fra opptaket stoppet.
      */
     fun onTranscribed(responseJson: String, audioSeconds: Double, uploadBytes: Int, millis: Long)
+
+    fun onError(message: String)
+}
+
+/** Et svar som strømmer fra OpenRouter. Kalles alltid på hovedtråden. */
+interface ChatListener {
+    /** En hendelse: JSON-en etter `data:`. [millis] er tiden siden forespørselen ble sendt. */
+    fun onEvent(dataJson: String, millis: Long)
+
+    /** Strømmen er ferdig. */
+    fun onDone(millis: Long)
 
     fun onError(message: String)
 }

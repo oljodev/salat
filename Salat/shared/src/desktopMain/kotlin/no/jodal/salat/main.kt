@@ -91,6 +91,21 @@ private object PreviewBridge : NativeBridge {
         sttListener = null
     }
 
+    override fun openRouterWarmUp() = Unit
+
+    // Later som svaret strømmer inn ord for ord.
+    override fun openRouterChat(apiKey: String, bodyJson: String, listener: ChatListener) {
+        val words = "Hei! Dette er et svar fra forhåndsvisningen. Det kommer ord for ord.".split(" ")
+        words.forEachIndexed { i, word ->
+            val text = if (i == 0) word else " $word"
+            listener.onEvent("""{"provider":"Forhåndsvisning","choices":[{"delta":{"content":"$text"}}]}""", 240L + i * 20)
+        }
+        listener.onEvent("""{"choices":[{"delta":{"content":""}}],"usage":{"prompt_tokens":1200,"completion_tokens":20,"cost":0.00002}}""", 500)
+        listener.onDone(500)
+    }
+
+    override fun openRouterCancelChat() = Unit
+
     override fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit) = onResult(
         """{"data":[
             {"id":"openai/whisper-1","name":"OpenAI: Whisper","created":1700000000},

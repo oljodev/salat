@@ -41,6 +41,9 @@ data class KompisSettings(
     /** Modellen og språket i testen av tale til tekst. Tomt språk betyr at modellen finner det selv. */
     val sttModel: String = DefaultSttModel,
     val sttLanguage: String = "no",
+    /** Språkmodellen og leverandørene i rekkefølge. Ingen leverandører lar OpenRouter velge. */
+    val llmModel: String = DefaultLlmModel,
+    val llmProviders: List<String> = DefaultLlmProviders,
 )
 
 const val DefaultPersonality =

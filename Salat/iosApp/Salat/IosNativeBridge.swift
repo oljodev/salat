@@ -93,6 +93,18 @@ final class IosNativeBridge: NSObject, NativeBridge {
         OpenRouter.get(path: path, apiKey: apiKey, completion: onResult)
     }
 
+    func openRouterWarmUp() {
+        OpenRouter.warmUp()
+    }
+
+    func openRouterChat(apiKey: String, bodyJson: String, listener: ChatListener) {
+        OpenRouterChat.shared.start(apiKey: apiKey, bodyJson: bodyJson, listener: listener)
+    }
+
+    func openRouterCancelChat() {
+        OpenRouterChat.shared.cancel()
+    }
+
     func ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) {
         EkkoImport.shared.youTube(clipId: clipId, videoId: videoId, listener: listener)
     }
