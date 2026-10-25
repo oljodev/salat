@@ -11,7 +11,7 @@ Forsiden har to deler: **Appene dine** og **Verktøy**.
 | Mini-app | Del | Hva den gjør |
 | --- | --- | --- |
 | Rise | Appene dine | Alarmer og varsler i grupper, med gjentakelser og slumring. Se [planen](docs/rise.md). |
-| Kompis | Appene dine | Snakk med Gemini Live med stemmen, også med skjermen av. Samtalene lagres og kan fortsettes. Bruker `gemini-3.8-live`, og husker samtalen som tekst for å holde prisen nede. Har også tester av tale til tekst og språkmodeller fra OpenRouter, som første steg mot å bytte ut Gemini Live. |
+| Kompis | Appene dine | Snakk med Gemini Live med stemmen, også med skjermen av. Samtalene lagres og kan fortsettes. Bruker `gemini-3.8-live`, og husker samtalen som tekst for å holde prisen nede. Har også tester av tale til tekst, språkmodeller og tekst til tale fra OpenRouter, som første steg mot å bytte ut Gemini Live. |
 | Ekko | Appene dine | Lyder og sitater fra YouTube Shorts, Snapchat Spotlight og videoer på telefonen. Klipp ut biten du vil ha, gi den navn og lag spillelister. Spiller med skjermen av, og kan styres fra låseskjermen. |
 | Brems | Appene dine | Mindre scrolling. En kort pause hver gang du åpner en app du vil bruke mindre, varsel etter 5 minutter, og en pause på 60 sekunder etter 10 minutter. Mål per app, f.eks. under 15 minutter Snapchat om dagen, med rekker, og statistikk for uke og måned. Alt kan stilles inn. Krever to automasjoner i Snarveier, se oppsettet i Brems. |
 | Fornyelse | Verktøy | Viser hvor lenge det er til appen må fornyes i SideStore. Salat varsler også dagen før. |

@@ -51,6 +51,12 @@ fun formatKilobytes(bytes: Int): String = "${(bytes + 500) / 1000} kB"
 /** F.eks. «$0,00014». Lyd koster lite per forsøk, så det trengs mange desimaler. */
 fun formatUsd(dollars: Double): String = "$${decimal(dollars, 5)}"
 
+/** F.eks. «$13 per million tegn» for en pris på 0,000013 dollar per tegn. */
+fun formatPricePerMillion(dollarsPerUnit: Double, unit: String): String {
+    val perMillion = dollarsPerUnit * 1_000_000
+    return "$${if (perMillion >= 10) kotlin.math.round(perMillion).toLong().toString() else decimal(perMillion, 2)} per million $unit"
+}
+
 /** [value] med [decimals] desimaler og komma, som på norsk. */
 private fun decimal(value: Double, decimals: Int): String {
     var factor = 1L

@@ -9,6 +9,8 @@ internal object FakeBridge : NativeBridge {
     val openRouterGets = mutableListOf<String>()
     var chatSentWith: String? = null
     var chatCancelled = false
+    val ttsCalls = mutableListOf<String>()
+    var ttsSentWith: String? = null
 
     /** Svaret [openRouterGet] gir, eller `null` for å aldri svare. */
     var openRouterResult: Pair<String?, String?>? = null
@@ -51,6 +53,19 @@ internal object FakeBridge : NativeBridge {
     }
     override fun openRouterCancelChat() {
         chatCancelled = true
+    }
+    override fun ttsSpeak(id: String, apiKey: String, bodyJson: String, sampleRate: Int, callAudio: Boolean, listener: TtsListener) {
+        ttsCalls += "speak $id $sampleRate $callAudio"
+        ttsSentWith = bodyJson
+    }
+    override fun ttsReplay(id: String, callAudio: Boolean, listener: TtsListener) {
+        ttsCalls += "replay $id"
+    }
+    override fun ttsStop() {
+        ttsCalls += "stop"
+    }
+    override fun ttsClose() {
+        ttsCalls += "close"
     }
     override fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit) {
         openRouterGets += path

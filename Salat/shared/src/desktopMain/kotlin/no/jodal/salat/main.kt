@@ -106,6 +106,18 @@ private object PreviewBridge : NativeBridge {
 
     override fun openRouterCancelChat() = Unit
 
+    // Later som lyden kom med en gang, og at den er spilt av.
+    override fun ttsSpeak(id: String, apiKey: String, bodyJson: String, sampleRate: Int, callAudio: Boolean, listener: TtsListener) {
+        listener.onFirstAudio(id, 310)
+        listener.onReceived(id, 900, 3.2, 153_600, "pcm 24 kHz")
+    }
+
+    override fun ttsReplay(id: String, callAudio: Boolean, listener: TtsListener) = Unit
+
+    override fun ttsStop() = Unit
+
+    override fun ttsClose() = Unit
+
     override fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit) = onResult(
         """{"data":[
             {"id":"openai/whisper-1","name":"OpenAI: Whisper","created":1700000000},

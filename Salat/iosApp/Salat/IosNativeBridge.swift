@@ -105,6 +105,24 @@ final class IosNativeBridge: NSObject, NativeBridge {
         OpenRouterChat.shared.cancel()
     }
 
+    func ttsSpeak(id: String, apiKey: String, bodyJson: String, sampleRate: Int32, callAudio: Bool, listener: TtsListener) {
+        EkkoAudio.shared.pauseForOtherAudio()
+        TtsPlayer.shared.speak(id: id, apiKey: apiKey, bodyJson: bodyJson, sampleRate: Int(sampleRate), callAudio: callAudio, listener: listener)
+    }
+
+    func ttsReplay(id: String, callAudio: Bool, listener: TtsListener) {
+        EkkoAudio.shared.pauseForOtherAudio()
+        TtsPlayer.shared.replay(id: id, callAudio: callAudio, listener: listener)
+    }
+
+    func ttsStop() {
+        TtsPlayer.shared.stop()
+    }
+
+    func ttsClose() {
+        TtsPlayer.shared.close()
+    }
+
     func ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) {
         EkkoImport.shared.youTube(clipId: clipId, videoId: videoId, listener: listener)
     }

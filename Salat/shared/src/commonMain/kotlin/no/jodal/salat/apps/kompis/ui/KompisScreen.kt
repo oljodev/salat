@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -85,6 +86,7 @@ private sealed interface KompisDestination {
     data class Live(val conversationId: String?) : KompisDestination
     data object SttTest : KompisDestination
     data object LlmTest : KompisDestination
+    data object TtsTest : KompisDestination
 }
 
 @Composable
@@ -113,7 +115,8 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                         slideInVertically(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     initialState is KompisDestination.Live ->
                         fadeIn(tween(duration)) togetherWith slideOutVertically(tween(duration)) { it }
-                    targetState is KompisDestination.Chat || targetState is KompisDestination.SttTest || targetState is KompisDestination.LlmTest ->
+                    targetState is KompisDestination.Chat || targetState is KompisDestination.SttTest || targetState is KompisDestination.LlmTest ||
+                        targetState is KompisDestination.TtsTest ->
                         slideInHorizontally(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     else -> fadeIn(tween(duration)) togetherWith slideOutHorizontally(tween(duration)) { it }
                 }
@@ -133,6 +136,13 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                     onSettings = { showSettings = true },
                     onSttTest = { destination = KompisDestination.SttTest },
                     onLlmTest = { destination = KompisDestination.LlmTest },
+                    onTtsTest = { destination = KompisDestination.TtsTest },
+                )
+                KompisDestination.TtsTest -> TtsTestScreen(
+                    store = store,
+                    bridge = bridge,
+                    onBack = { destination = KompisDestination.Home },
+                    onSettings = { showSettings = true },
                 )
                 KompisDestination.LlmTest -> LlmTestScreen(
                     store = store,
@@ -214,6 +224,7 @@ fun KompisHome(
     onSettings: () -> Unit,
     onSttTest: () -> Unit,
     onLlmTest: () -> Unit,
+    onTtsTest: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val now = store.nowMillis()
@@ -250,6 +261,9 @@ fun KompisHome(
         }
         item(key = "llm") {
             TestRow(Icons.Rounded.Forum, "Test språkmodell", "Chat med en modell fra OpenRouter, og se hvor raskt svarene kommer.", onLlmTest)
+        }
+        item(key = "tts") {
+            TestRow(Icons.Rounded.RecordVoiceOver, "Test tekst til tale", "Hør hvordan stemmene fra OpenRouter leser norsk.", onTtsTest)
         }
 
         item(key = "heading") {

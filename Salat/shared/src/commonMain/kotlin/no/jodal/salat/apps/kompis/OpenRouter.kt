@@ -10,6 +10,10 @@ data class OpenRouterModel(
     val createdAtSeconds: Long,
     /** Hvordan modellen tenker før den svarer, eller `null` hvis den ikke gjør det. */
     val reasoning: ModelReasoning? = null,
+    /** Stemmene en modell for tekst til tale har. */
+    val voices: List<String> = emptyList(),
+    /** Prisen i dollar per enhet inn, f.eks. per tegn for tekst til tale, eller `null` hvis ukjent. */
+    val inputPrice: Double? = null,
 ) {
     /** Navnet uten firmaet foran, f.eks. «Voxtral Mini Transcribe 3». */
     val shortName: String get() = name.substringAfter(": ", name)
@@ -27,6 +31,9 @@ data class OpenRouterProvider(val slug: String, val name: String)
 /** Modellen testen av tale til tekst starter med. */
 const val DefaultSttModel = "mistralai/voxtral-mini-transcribe-3-0"
 
+/** Modellen testen av tekst til tale starter med. */
+const val DefaultTtsModel = "mistralai/voxtral-mini-tts-3-0"
+
 /** Språkmodellen Kompis starter med. Valgt for prisen. */
 const val DefaultLlmModel = "deepseek/deepseek-v4-flash-0731"
 
@@ -36,6 +43,9 @@ val DefaultLlmProviders = listOf("wafer", "baseten")
 object OpenRouter {
     /** Modellene som gjør tale til tekst, filtrert etter innstillingene til nøkkelen hos OpenRouter. */
     const val SttModelsPath = "models/user?output_modalities=transcription"
+
+    /** Modellene som gjør tekst til tale, filtrert etter innstillingene til nøkkelen hos OpenRouter. */
+    const val TtsModelsPath = "models/user?output_modalities=speech"
 
     /** Språkmodellene, filtrert etter innstillingene til nøkkelen hos OpenRouter. */
     const val LlmModelsPath = "models/user?output_modalities=text"
@@ -55,6 +65,8 @@ object OpenRouter {
                     reasoning = info.reasoning?.let {
                         ModelReasoning(mandatory = it.mandatory, supportsNone = "none" in it.supported_efforts.orEmpty())
                     },
+                    voices = info.supported_voices.orEmpty(),
+                    inputPrice = info.pricing?.prompt?.toDoubleOrNull(),
                 )
             }
             .sortedByDescending { it.createdAtSeconds }
@@ -68,8 +80,19 @@ object OpenRouter {
     @Serializable
     private data class ModelList(val data: List<ModelInfo>)
 
+    @Suppress("PropertyName")
     @Serializable
-    private data class ModelInfo(val id: String, val name: String = "", val created: Long = 0, val reasoning: ReasoningInfo? = null)
+    private data class ModelInfo(
+        val id: String,
+        val name: String = "",
+        val created: Long = 0,
+        val reasoning: ReasoningInfo? = null,
+        val supported_voices: List<String>? = null,
+        val pricing: Pricing? = null,
+    )
+
+    @Serializable
+    private data class Pricing(val prompt: String? = null)
 
     @Suppress("PropertyName")
     @Serializable

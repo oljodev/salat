@@ -56,11 +56,11 @@ import no.jodal.salat.apps.kompis.formatReleased
 
 /** Valgt modell, med [details] under navnet. Trykk for å velge en annen. */
 @Composable
-internal fun ModelRow(name: String, details: String, onClick: () -> Unit) {
+internal fun ModelRow(name: String, details: String, label: String = "Modell", onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "Modell",
+            label,
             style = MaterialTheme.typography.labelLarge,
             color = colors.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp),
@@ -80,7 +80,7 @@ internal fun ModelRow(name: String, details: String, onClick: () -> Unit) {
                 Text(name, style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
                 Text(details, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
-            Icon(Icons.Rounded.ChevronRight, contentDescription = "Velg modell", tint = colors.onSurfaceVariant)
+            Icon(Icons.Rounded.ChevronRight, contentDescription = "Velg", tint = colors.onSurfaceVariant)
         }
     }
 }
@@ -292,5 +292,88 @@ internal fun KeyNotice(onClick: () -> Unit) {
             )
         }
         Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant)
+    }
+}
+
+/** Velg én av [options], med søk. [highlight] gir en liten merknad, f.eks. «Norsk». */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ChoiceSheet(
+    title: String,
+    options: List<String>,
+    selected: String?,
+    highlight: (String) -> String? = { null },
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+
+    fun close(then: () -> Unit = {}) {
+        then()
+        scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        containerColor = colors.background,
+    ) {
+        Column(Modifier.fillMaxHeight(0.9f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Spacer(Modifier.size(64.dp, 1.dp))
+                Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                TextButton(onClick = { close() }) { Text("Ferdig", style = MaterialTheme.typography.bodyLarge) }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.surfaceVariant)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Icon(Icons.Rounded.Search, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface),
+                    cursorBrush = SolidColor(colors.primary),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        Box {
+                            if (query.isEmpty()) Text("Søk", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                            inner()
+                        }
+                    },
+                )
+            }
+            val shown = options.filter { query.isBlank() || query.trim().lowercase() in it.lowercase() }
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
+            ) {
+                items(shown, key = { it }) { option ->
+                    if (option != shown.first()) HorizontalDivider(color = colors.outlineVariant)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { close { onSelect(option) } }.padding(horizontal = 4.dp, vertical = 12.dp),
+                    ) {
+                        Text(option, style = MaterialTheme.typography.bodyLarge, color = colors.onSurface, modifier = Modifier.weight(1f))
+                        highlight(option)?.let {
+                            Text(it, style = MaterialTheme.typography.labelMedium, color = colors.secondary)
+                        }
+                        RadioDot(option == selected)
+                    }
+                }
+            }
+        }
     }
 }

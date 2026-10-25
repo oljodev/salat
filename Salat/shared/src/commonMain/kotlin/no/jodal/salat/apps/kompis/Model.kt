@@ -44,6 +44,14 @@ data class KompisSettings(
     /** Språkmodellen og leverandørene i rekkefølge. Ingen leverandører lar OpenRouter velge. */
     val llmModel: String = DefaultLlmModel,
     val llmProviders: List<String> = DefaultLlmProviders,
+    /** Testen av tekst til tale: modellen, stemmen og samplingsfrekvensen per modell (0 = finn ut selv). */
+    val ttsModel: String = DefaultTtsModel,
+    val ttsVoices: Map<String, String> = emptyMap(),
+    val ttsSampleRates: Map<String, Int> = emptyMap(),
+    /** Regi til stemmen, f.eks. «varm og rolig». Ikke alle modeller bruker den. */
+    val ttsInstructions: String = "",
+    /** Spill av med samme lydoppsett som i samtaler, i stedet for best mulig lyd. */
+    val ttsCallAudio: Boolean = true,
 )
 
 const val DefaultPersonality =

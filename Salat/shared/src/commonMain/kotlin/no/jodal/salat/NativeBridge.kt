@@ -92,6 +92,22 @@ interface NativeBridge {
     /** Stopper svaret som strømmer. [ChatListener] får ikke vite mer om det. */
     fun openRouterCancelChat()
 
+    /**
+     * Sender [bodyJson] til `audio/speech` hos OpenRouter og spiller av lyden mens den kommer. Lyden
+     * tas vare på som [id], så den kan spilles igjen. [sampleRate] = 0 lar Swift finne den ut.
+     * [callAudio] spiller av som i en samtale, ellers med best mulig lyd. Stopper det som spilles.
+     */
+    fun ttsSpeak(id: String, apiKey: String, bodyJson: String, sampleRate: Int, callAudio: Boolean, listener: TtsListener)
+
+    /** Spiller av [id] på nytt. */
+    fun ttsReplay(id: String, callAudio: Boolean, listener: TtsListener)
+
+    /** Stopper avspillingen og det som lastes ned. */
+    fun ttsStop()
+
+    /** Stopper alt og glemmer lyden. */
+    fun ttsClose()
+
     // Ekko. Lyden til hver lyd ligger i en fil som heter det samme som lyden sin id.
 
     /** Henter lyden fra YouTube-videoen [videoId] og lagrer den som [clipId]. */
@@ -185,6 +201,19 @@ interface ChatListener {
     fun onDone(millis: Long)
 
     fun onError(message: String)
+}
+
+/** Det som skjer med en lyd fra tekst til tale. Kalles alltid på hovedtråden. */
+interface TtsListener {
+    /** Den første lyden kom, [millis] etter at forespørselen ble sendt. */
+    fun onFirstAudio(id: String, millis: Long)
+
+    /** All lyden har kommet. [format] er f.eks. `pcm 24 kHz` eller `mp3`. */
+    fun onReceived(id: String, millis: Long, audioSeconds: Double, bytes: Int, format: String)
+
+    fun onPlaying(id: String, playing: Boolean)
+
+    fun onError(id: String, message: String)
 }
 
 /** Hvordan det går med å hente en lyd. Kalles alltid på hovedtråden. */
