@@ -15,6 +15,11 @@ on:
       - ".github/workflows/salat.yml"
       - ".github/scripts/update_sidestore_source.py"
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Bygg Kotlin-delen i Release (tregere, men raskere i appen)"
+        type: boolean
+        default: false
 
 # Nye pushes til en PR avbryter bygget som allerede går. Bygg på main får alltid gå ferdig.
 concurrency:
@@ -44,11 +49,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Debug-bygget av Kotlin bruker ferdiglagde biblioteker i ~/.konan, og samme mappe tar vare på det
+      # Kotlin/Native lager selv. Nøkkelen har «debug» i seg, så første bygg etter bytte lagrer en ny cache.
       - name: Cache Kotlin/Native
         uses: actions/cache@v6
         with:
           path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('Salat/gradle/libs.versions.toml') }}
+          key: konan-debug-${{ runner.os }}-${{ hashFiles('Salat/gradle/libs.versions.toml') }}
 
       - name: Generate Xcode project
         working-directory: Salat/iosApp
@@ -60,8 +67,13 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
+      # Kotlin bygges i Debug: Release optimaliserer hele Compose fra bunnen av i hvert bygg, og det tok
+      # åtte minutter eller mer. Resten av appen (Swift) bygges fortsatt i Release. Kjør workflowen for
+      # hånd med «release» på for en ferdig optimalisert Kotlin-del.
       - name: Build app (unsigned)
         working-directory: Salat/iosApp
+        env:
+          KOTLIN_FRAMEWORK_BUILD_TYPE: ${{ inputs.release && 'release' || 'debug' }}
         run: |
           xcodebuild build \
             -project Salat.xcodeproj \
