@@ -176,26 +176,34 @@ private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Un
                 }
             }
         }
-        Text(
-            when {
-                recording && tapMode -> "Trykk for å sende"
-                recording -> "Slipp for å sende"
-                speaking -> "Hold inne for å avbryte"
-                thinking -> "Tenker …"
-                status == LiveStatus.Connecting -> "Kobler til …"
-                else -> "Hold inne og snakk"
-            },
-            style = MaterialTheme.typography.titleMedium,
-            color = White,
-        )
-        if (status == LiveStatus.Listening) {
+        // Teksten under knappen har fast høyde, så knappen ikke flytter seg når hjelpeteksten kommer og går.
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.height(60.dp),
+        ) {
             Text(
-                "Eller trykk én gang for å starte, og én gang til for å sende",
-                style = MaterialTheme.typography.labelMedium,
-                color = White.copy(alpha = 0.5f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp),
+                when {
+                    recording && tapMode -> "Trykk for å sende"
+                    recording -> "Slipp for å sende"
+                    speaking -> "Hold inne for å avbryte"
+                    thinking -> "Tenker …"
+                    status == LiveStatus.Connecting -> "Kobler til …"
+                    else -> "Hold inne og snakk"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                color = White,
             )
+            if (status == LiveStatus.Listening) {
+                Text(
+                    "Eller trykk én gang for å starte, og én gang til for å sende",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = White.copy(alpha = 0.5f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                )
+            }
         }
     }
 }
