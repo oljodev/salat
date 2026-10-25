@@ -60,7 +60,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.rounded.Tune
 import no.jodal.salat.resources.Res
-import no.jodal.salat.resources.kompis_logo
+import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +93,19 @@ import no.jodal.salat.apps.kompis.periodOf
 import no.jodal.salat.ui.BackButton
 import no.jodal.salat.ui.LocalDarkTheme
 
+/** Kompis har mange ansikter: en figur velges tilfeldig hver gang Kompis åpnes. */
+private val Mascots = listOf(
+    Res.drawable.kompis_drope,
+    Res.drawable.kompis_sky,
+    Res.drawable.kompis_firkant,
+    Res.drawable.kompis_trekant,
+    Res.drawable.kompis_hjerte,
+    Res.drawable.kompis_stjerne,
+    Res.drawable.kompis_pille,
+    Res.drawable.kompis_spokelse,
+    Res.drawable.kompis_bonne,
+)
+
 private sealed interface KompisDestination {
     data object Home : KompisDestination
     data class Chat(val id: String) : KompisDestination
@@ -107,6 +120,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
         var destination by remember { mutableStateOf<KompisDestination>(KompisDestination.Home) }
         var showSettings by remember { mutableStateOf(false) }
         var showTranscript by remember { mutableStateOf(false) }
+        val mascot = remember { Mascots.random() }
 
         // «Snakk med Kompis» fra widgeten eller kontrollsenteret starter en samtale med en gang.
         LaunchedEffect(DeepLinks.pending) {
@@ -135,6 +149,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                 KompisDestination.Home -> KompisHome(
                     store = store,
                     live = live,
+                    mascot = mascot,
                     onBack = onBack,
                     onStart = {
                         live.start(continuing = null)
@@ -207,6 +222,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
 fun KompisHome(
     store: KompisStore,
     live: KompisLive,
+    mascot: DrawableResource,
     onBack: () -> Unit,
     onStart: () -> Unit,
     onReturnToLive: () -> Unit,
@@ -253,7 +269,7 @@ fun KompisHome(
                 CircleIconButton(Icons.Rounded.Tune, "Innstillinger", onClick = onSettings)
             }
         }
-        item(key = "title") { Title() }
+        item(key = "title") { Title(mascot) }
         item(key = "start") {
             if (live.isActive) OngoingRow(live, onClick = onReturnToLive) else StartButton(onStart)
         }
@@ -309,7 +325,7 @@ fun KompisHome(
 }
 
 @Composable
-private fun Title() {
+private fun Title(mascot: DrawableResource) {
     val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -317,13 +333,13 @@ private fun Title() {
         modifier = Modifier.padding(top = 12.dp),
     ) {
         Image(
-            painterResource(Res.drawable.kompis_logo),
+            painterResource(mascot),
             contentDescription = null,
             modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(14.dp))
-                // En tynn kant, så den mørke logoen synes mot svart bakgrunn.
-                .border(1.dp, colors.outlineVariant, RoundedCornerShape(14.dp)),
+                .size(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.surfaceVariant)
+                .padding(5.dp),
         )
         Column {
             Text("Kompis", style = MaterialTheme.typography.displaySmall, color = colors.onBackground)
