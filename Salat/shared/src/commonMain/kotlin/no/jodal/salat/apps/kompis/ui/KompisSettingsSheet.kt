@@ -77,6 +77,7 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
     var apiKey by remember { mutableStateOf(store.apiKey) }
     var openRouterKey by remember { mutableStateOf(store.openRouterKey) }
     var engine by remember { mutableStateOf(store.engine) }
+    var handsFree by remember { mutableStateOf(store.data.settings.handsFree) }
     var voice by remember { mutableStateOf(store.data.settings.voice) }
     var personality by remember { mutableStateOf(store.data.settings.personality) }
     val uriHandler = LocalUriHandler.current
@@ -89,7 +90,7 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
                 onClose {
                     store.saveApiKey(apiKey)
                     store.saveOpenRouterKey(openRouterKey)
-                    store.update { it.copy(settings = it.settings.copy(engine = engine.id, voice = voice, personality = personality.trim().ifEmpty { DefaultPersonality })) }
+                    store.update { it.copy(settings = it.settings.copy(engine = engine.id, handsFree = handsFree, voice = voice, personality = personality.trim().ifEmpty { DefaultPersonality })) }
                 }
             }) {
                 Text("Lagre", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
@@ -116,6 +117,14 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )
+                }
+            }
+
+            if (engine == KompisEngine.OpenRouter) {
+                SettingsSection("Samtale") {
+                    RadioRow("Hold inne og snakk", "Du holder inne en knapp mens du snakker. Best når telefonen er i hånden.", selected = !handsFree) { handsFree = false }
+                    SectionDivider()
+                    RadioRow("Håndfri", "Kompis hører selv når du snakker og når du er ferdig, og du kan avbryte den. Best med AirPods og låst skjerm.", selected = handsFree) { handsFree = true }
                 }
             }
 

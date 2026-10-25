@@ -36,8 +36,8 @@ final class SttRecorder {
     /// Lyden rett før knappen ble trykket, så første stavelse ikke forsvinner.
     private var preRoll: [Data] = []
     private var preRollBytes = 0
-    /// Omtrent 0,3 sekunder.
-    private static let maxPreRollBytes = 16_000 * 2 * 3 / 10
+    /// Omtrent 0,7 sekunder: håndfri må høre litt av tale før den vet at det er tale.
+    private static let maxPreRollBytes = 16_000 * 2 * 7 / 10
     /// Hvor mange lydbiter mikrofonen har gitt, for å se om den virker.
     private var micBuffers = 0
     private var lastLevelUpdate = Date.distantPast

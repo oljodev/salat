@@ -52,6 +52,15 @@ class OpenRouterPipeline(
 
     private var phase = Phase.Closed
 
+    // Håndfri modus: mikrofonen står på, og [voice] hører når man snakker.
+    private val voice = VoiceActivity(clock)
+
+    /** Opptaket startet av seg selv, og stopper når det blir stille. */
+    private var autoRecording = false
+
+    /** Mikrofonen har ekkodemping. Uten den kan Kompis ikke avbrytes ved å snakke, for da hører den seg selv. */
+    private var echoCancelled = true
+
     /** Samtalen så langt, som språkmodellen får den. */
     private val turns = mutableListOf<Pair<Role, String>>()
 
@@ -74,6 +83,7 @@ class OpenRouterPipeline(
     private var heardAfterMillis: Long? = null
 
     private val settings get() = store.data.settings
+    private val handsFree get() = settings.handsFree
 
     /** Om en tur er i gang: Kompis tenker eller snakker. */
     val isAnswering: Boolean get() = phase == Phase.Thinking || phase == Phase.Speaking
@@ -103,20 +113,50 @@ class OpenRouterPipeline(
             Phase.Thinking, Phase.Speaking -> interrupt()
             Phase.Idle -> Unit
         }
+        startRecording(auto = false)
+    }
+
+    private fun startRecording(auto: Boolean) {
         if (!store.hasOpenRouterKey) {
             host.onNotice("Legg inn en OpenRouter-nøkkel i innstillingene først.")
             return
         }
+        autoRecording = auto || handsFree
         phase = Phase.Recording
         host.onStatus("recording")
         bridge.kompisSttStartRecording()
     }
 
     /** Knappen slippes, eller trykkes én gang til. Sender opptaket. */
-    fun talkStop() {
+    fun talkStop() = stopRecording(silentFor = 0)
+
+    /**
+     * Et trykk i håndfri modus: sender det som tas opp med en gang, avbryter Kompis, eller begynner å ta opp.
+     */
+    fun tap() {
+        when (phase) {
+            Phase.Recording -> talkStop()
+            Phase.Thinking, Phase.Speaking -> {
+                interrupt()
+                host.onStatus("listening")
+            }
+            Phase.Idle -> talkStart()
+            Phase.Opening, Phase.Transcribing, Phase.Closed -> Unit
+        }
+    }
+
+    /** Bytter mellom håndfri og knapp. Et opptak som pågår, sendes. */
+    fun handsFreeChanged() {
+        voice.reset()
+        if (phase == Phase.Recording && autoRecording && !handsFree) talkStop()
+    }
+
+    /** [silentFor]: hvor lenge det var stille før opptaket ble stoppet. Tiden regnes fra man sluttet å snakke. */
+    private fun stopRecording(silentFor: Long) {
         if (phase != Phase.Recording) return
         phase = Phase.Transcribing
-        releasedAt = clock()
+        voice.reset()
+        releasedAt = clock() - silentFor
         host.onStatus("thinking")
         sttLanguage = SttLanguage.byId(settings.sttLanguage)
         sttRetried = false
@@ -129,11 +169,13 @@ class OpenRouterPipeline(
 
     private val stt = object : SttListener {
         override fun onLevel(level: Float) {
-            if (phase == Phase.Recording) host.onLevel(level)
+            if (handsFree) listenHandsFree(level)
+            if (phase == Phase.Recording || (handsFree && phase == Phase.Idle)) host.onLevel(level)
         }
 
         override fun onMicrophone(name: String) {
             if (phase == Phase.Closed) return
+            echoCancelled = !name.contains("uten ekkodemping")
             host.onAudioRoute(name)
             if (phase == Phase.Opening) {
                 phase = Phase.Idle
@@ -162,7 +204,8 @@ class OpenRouterPipeline(
             val text = OpenRouter.parseTranscript(responseJson)
             when {
                 text == null -> backToListening("Forsto ikke svaret fra OpenRouter.")
-                text.isEmpty() -> backToListening("Hørte ikke noe. Prøv igjen.")
+                // Håndfri hører av og til en hoste eller en dør, og det er ikke noe å si fra om.
+                text.isEmpty() -> backToListening(if (handsFree) null else "Hørte ikke noe. Prøv igjen.")
                 else -> {
                     host.onUserText(text)
                     turns += Role.User to text
@@ -173,6 +216,29 @@ class OpenRouterPipeline(
 
         override fun onError(message: String) {
             if (phase == Phase.Transcribing || phase == Phase.Recording) backToListening(message)
+        }
+    }
+
+    /** Hører etter tale i håndfri modus: starter opptaket, stopper det når det blir stille, og avbryter Kompis. */
+    private fun listenHandsFree(level: Float) {
+        val answering = phase == Phase.Thinking || phase == Phase.Speaking
+        when (phase) {
+            Phase.Idle, Phase.Recording -> Unit
+            // Uten ekkodemping hører Kompis seg selv, så da avbrytes den bare med et trykk.
+            Phase.Thinking, Phase.Speaking -> if (!echoCancelled) return
+            else -> return
+        }
+        when (voice.update(level, strict = answering)) {
+            VoiceActivity.Event.None -> Unit
+            VoiceActivity.Event.SpeechStarted -> when (phase) {
+                Phase.Idle -> startRecording(auto = true)
+                Phase.Thinking, Phase.Speaking -> {
+                    interrupt()
+                    startRecording(auto = true)
+                }
+                else -> Unit
+            }
+            VoiceActivity.Event.SpeechEnded -> if (phase == Phase.Recording && autoRecording) stopRecording(silentFor = voice.silenceMillis)
         }
     }
 
@@ -317,6 +383,7 @@ class OpenRouterPipeline(
             if (!isAnswering) return
             turns += Role.Kompis to sentences.joinToString(" ")
             phase = Phase.Idle
+            voice.reset()
             host.onTurnComplete()
             host.onStatus("listening")
             host.onTimings(timings().copy(totalMillis = clock() - releasedAt))
@@ -355,10 +422,11 @@ class OpenRouterPipeline(
         host.onNotice(message)
     }
 
-    private fun backToListening(message: String) {
+    private fun backToListening(message: String?) {
         phase = Phase.Idle
+        voice.reset()
         host.onStatus("listening")
-        host.onNotice(message)
+        message?.let(host::onNotice)
     }
 
     private fun keepWhatWasSaid() {

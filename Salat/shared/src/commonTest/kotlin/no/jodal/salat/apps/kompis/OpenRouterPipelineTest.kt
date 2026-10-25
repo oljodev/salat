@@ -430,4 +430,113 @@ class OpenRouterPipelineTest {
         )
         assertEquals("Tale til tekst 210 ms", formatTimings(TurnTimings(210, null, null, null)))
     }
+
+    // Håndfri modus.
+
+    private fun handsFree(route: String = "iPhone-mikrofon") {
+        store.update { it.copy(settings = it.settings.copy(handsFree = true)) }
+        pipeline.start(emptyList())
+        stt.onMicrophone(route)
+        host.events.clear()
+        bridge.pipelineCalls.clear()
+    }
+
+    private fun levels(level: Float, millis: Long) {
+        repeat((millis / 60).toInt()) {
+            clockMillis += 60
+            stt.onLevel(level)
+        }
+    }
+
+    @Test
+    fun handsFreeRecordsAndSendsOnItsOwn() {
+        handsFree()
+        levels(0.05f, 600)
+        assertEquals(emptyList(), bridge.pipelineCalls)
+
+        levels(0.7f, 600)
+        assertEquals(listOf("record"), bridge.pipelineCalls)
+        assertTrue("status recording" in host.events)
+
+        levels(0.05f, 900)
+        assertEquals(listOf("record", "send"), bridge.pipelineCalls)
+        assertTrue("status thinking" in host.events)
+    }
+
+    @Test
+    fun handsFreeCountsTheTimeFromWhenYouStoppedTalking() {
+        handsFree()
+        levels(0.05f, 600)
+        levels(0.7f, 600)
+        levels(0.05f, 900)
+        stt.onTranscribed("""{"text":"Hei"}""", 2.0, 64_000, 210)
+        chunk("Hei!")
+        chat.onDone(500)
+        clockMillis += 300
+        speech.onItemStarted("s0")
+        // Tiden regnes fra siste ord: de 700 ms stillhet det ble ventet på, og så 300 ms.
+        assertEquals(1_000L, host.timings!!.heardAfterMillis)
+    }
+
+    @Test
+    fun handsFreeIgnoresACoughThatGivesNoText() {
+        handsFree()
+        levels(0.05f, 600)
+        levels(0.7f, 600)
+        levels(0.05f, 900)
+        stt.onTranscribed("""{"text":""}""", 1.0, 32_000, 200)
+        assertTrue(host.events.none { it.startsWith("notice") }, host.events.toString())
+        assertTrue("status listening" in host.events)
+    }
+
+    @Test
+    fun handsFreeInterruptsKompisWhenYouTalk() {
+        handsFree()
+        say("Fortell om haren")
+        chunk("Haren er rask. ")
+        speech.onItemStarted("s0")
+        host.events.clear()
+        bridge.pipelineCalls.clear()
+
+        levels(0.9f, 240)
+        assertEquals(emptyList(), bridge.pipelineCalls, "for kort til å være deg")
+        levels(0.05f, 600)
+        levels(0.9f, 480)
+        assertTrue(bridge.chatCancelled)
+        assertEquals(listOf("speech stop", "record"), bridge.pipelineCalls)
+        assertTrue("interrupted" in host.events)
+    }
+
+    @Test
+    fun withoutEchoCancellationOnlyATapInterruptsKompis() {
+        handsFree("iPhone-mikrofon, uten ekkodemping")
+        say("Fortell om haren")
+        chunk("Haren er rask. ")
+        speech.onItemStarted("s0")
+        bridge.pipelineCalls.clear()
+
+        levels(0.9f, 1_200)
+        assertEquals(emptyList(), bridge.pipelineCalls)
+        pipeline.tap()
+        assertEquals(listOf("speech stop"), bridge.pipelineCalls)
+    }
+
+    @Test
+    fun aTapInHandsFreeStartsAndSends() {
+        handsFree()
+        pipeline.tap()
+        assertEquals(listOf("record"), bridge.pipelineCalls)
+        pipeline.tap()
+        assertEquals(listOf("record", "send"), bridge.pipelineCalls)
+    }
+
+    @Test
+    fun turningHandsFreeOffSendsWhatIsBeingRecorded() {
+        handsFree()
+        levels(0.05f, 600)
+        levels(0.7f, 600)
+        store.update { it.copy(settings = it.settings.copy(handsFree = false)) }
+        pipeline.handsFreeChanged()
+        assertEquals(listOf("record", "send"), bridge.pipelineCalls)
+    }
 }

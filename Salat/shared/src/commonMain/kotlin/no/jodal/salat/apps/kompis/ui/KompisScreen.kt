@@ -190,6 +190,8 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                         onToggleMute = live::toggleMute,
                         onTalkStart = live::talkStart,
                         onTalkStop = live::talkStop,
+                        onTap = live::talkTap,
+                        onToggleHandsFree = live::toggleHandsFree,
                         onEnd = {
                             live.end()
                             leave()

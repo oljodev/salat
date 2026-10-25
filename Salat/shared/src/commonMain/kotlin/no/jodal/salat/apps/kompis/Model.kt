@@ -70,6 +70,8 @@ data class KompisSettings(
     val ttsInstructions: String = "",
     /** Spill av med samme lydoppsett som i samtaler, i stedet for best mulig lyd. */
     val ttsCallAudio: Boolean = true,
+    /** Håndfri samtale: Kompis hører selv når du snakker, uten knapp. Gjelder OpenRouter. */
+    val handsFree: Boolean = false,
 )
 
 const val DefaultPersonality =

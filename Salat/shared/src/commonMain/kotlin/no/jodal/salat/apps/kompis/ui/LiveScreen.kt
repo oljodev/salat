@@ -90,6 +90,8 @@ data class LiveUiState(
     val debug: String? = null,
     /** Man holder inne en knapp for å snakke, i stedet for at mikrofonen alltid er på. */
     val pushToTalk: Boolean = false,
+    /** Kompis hører selv når man snakker, uten knapp. Gjelder bare sammen med [pushToTalk]-oppsettet via OpenRouter. */
+    val handsFree: Boolean = false,
     /** Hvor raskt forrige tur gikk, når samtalen går gjennom OpenRouter. */
     val timings: TurnTimings? = null,
 )
@@ -105,6 +107,8 @@ fun LiveScreen(
     onToggleMute: () -> Unit,
     onTalkStart: () -> Unit,
     onTalkStop: () -> Unit,
+    onTap: () -> Unit,
+    onToggleHandsFree: () -> Unit,
     onEnd: () -> Unit,
     onMinimize: () -> Unit,
 ) {
@@ -124,7 +128,7 @@ fun LiveScreen(
             ) { transcript ->
                 if (transcript) Transcript(state) else Captions(state)
             }
-            Controls(state, onToggleMute = onToggleMute, onTalkStart = onTalkStart, onTalkStop = onTalkStop, onEnd = onEnd)
+            Controls(state, onToggleMute = onToggleMute, onTalkStart = onTalkStart, onTalkStop = onTalkStop, onTap = onTap, onToggleHandsFree = onToggleHandsFree, onEnd = onEnd)
         }
     }
 }
@@ -159,13 +163,13 @@ private fun TopBar(state: LiveUiState, showTranscript: Boolean, onMinimize: () -
 /** Hvordan det ser ut at samtalen er. Med knapp for å snakke lytter ikke mikrofonen før man holder inne. */
 private fun LiveUiState.displayMode(): VoiceMode = when {
     muted -> VoiceMode.Idle
-    pushToTalk && status == LiveStatus.Listening -> VoiceMode.Idle
+    pushToTalk && !handsFree && status == LiveStatus.Listening -> VoiceMode.Idle
     else -> status.voice
 }
 
 /** Det som står i statuslinjen. Uten at mikrofonen lytter, er man bare klar. */
 private fun LiveUiState.displayLabel(): String =
-    if (pushToTalk && status == LiveStatus.Listening) "Klar" else status.label
+    if (pushToTalk && !handsFree && status == LiveStatus.Listening) "Klar" else status.label
 
 /** «● Lytter · 04:12» */
 @Composable
@@ -195,7 +199,7 @@ private fun Captions(state: LiveUiState) {
     val recordingNow = state.pushToTalk && state.status == LiveStatus.Recording
     val current = when {
         state.message != null -> state.message
-        recordingNow -> "Snakk nå …"
+        recordingNow -> if (state.handsFree) "Jeg hører deg …" else "Snakk nå …"
         userIsTalking -> state.userDraft
         else -> state.kompisDraft ?: state.messages.lastOrNull { it.role == Role.Kompis }?.text
     }
@@ -214,6 +218,7 @@ private fun Captions(state: LiveUiState) {
         if (current == null) {
             Text(
                 when {
+                    state.status == LiveStatus.Listening && state.handsFree -> "Snakk når du vil, så svarer Kompis."
                     state.status == LiveStatus.Listening && state.pushToTalk -> "Hold inne knappen for å snakke."
                     state.status == LiveStatus.Listening -> "Si noe, så svarer Kompis."
                     else -> state.status.label + " …"
@@ -284,10 +289,12 @@ private fun Controls(
     onToggleMute: () -> Unit,
     onTalkStart: () -> Unit,
     onTalkStop: () -> Unit,
+    onTap: () -> Unit,
+    onToggleHandsFree: () -> Unit,
     onEnd: () -> Unit,
 ) {
     if (state.pushToTalk) {
-        PushToTalkControls(state, onTalkStart = onTalkStart, onTalkStop = onTalkStop, onEnd = onEnd)
+        PushToTalkControls(state, onTalkStart = onTalkStart, onTalkStop = onTalkStop, onTap = onTap, onToggleHandsFree = onToggleHandsFree, onEnd = onEnd)
         return
     }
     Column(

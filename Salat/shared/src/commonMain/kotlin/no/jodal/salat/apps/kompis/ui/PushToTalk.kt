@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,14 +63,21 @@ private val White = Color.White
  * snakkeknapp som viser hva som skjer, og avslutt.
  */
 @Composable
-internal fun PushToTalkControls(state: LiveUiState, onTalkStart: () -> Unit, onTalkStop: () -> Unit, onEnd: () -> Unit) {
+internal fun PushToTalkControls(
+    state: LiveUiState,
+    onTalkStart: () -> Unit,
+    onTalkStop: () -> Unit,
+    onTap: () -> Unit,
+    onToggleHandsFree: () -> Unit,
+    onEnd: () -> Unit,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
     ) {
         state.timings?.let { TimingsCard(it) }
-        TalkButton(state, onStart = onTalkStart, onStop = onTalkStop)
+        TalkButton(state, onStart = onTalkStart, onStop = onTalkStop, onTap = onTap)
         // Avslutt får sin egen bredde først, og lydruten tar resten og kortes ned hvis navnet er langt.
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -77,6 +85,7 @@ internal fun PushToTalkControls(state: LiveUiState, onTalkStart: () -> Unit, onT
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         ) {
             RouteChip(state.audioRoute, Modifier.weight(1f, fill = false))
+            HandsFreeToggle(state.handsFree, onToggleHandsFree)
             EndButton(onEnd)
         }
     }
@@ -88,7 +97,8 @@ internal fun PushToTalkControls(state: LiveUiState, onTalkStart: () -> Unit, onT
  * følger lyden mens man snakker, puster mens Kompis snakker, og går rundt mens Kompis tenker.
  */
 @Composable
-private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Unit) {
+private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Unit, onTap: () -> Unit) {
+    val handsFree = state.handsFree
     val status = state.status
     val recording = status == LiveStatus.Recording
     val speaking = status == LiveStatus.Speaking
@@ -101,6 +111,8 @@ private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Un
     val isReady by rememberUpdatedState(ready)
     val start by rememberUpdatedState(onStart)
     val stop by rememberUpdatedState(onStop)
+    val tap by rememberUpdatedState(onTap)
+    val isHandsFree by rememberUpdatedState(handsFree)
 
     val breathing = rememberInfiniteTransition()
     val breath by breathing.animateFloat(
@@ -121,6 +133,12 @@ private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Un
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
+                            if (isHandsFree) {
+                                // Håndfri: Kompis hører selv, så et trykk sender, avbryter eller starter.
+                                Haptics.tap()
+                                tap()
+                                return@detectTapGestures
+                            }
                             if (isRecording) {
                                 // Det andre trykket i trykk-modus.
                                 Haptics.tap()
@@ -189,6 +207,9 @@ private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Un
         ) {
             Text(
                 when {
+                    handsFree && recording -> "Trykk for å sende nå"
+                    handsFree && speaking -> "Snakk eller trykk for å avbryte"
+                    handsFree && status == LiveStatus.Listening -> "Kompis lytter"
                     recording && tapMode -> "Trykk for å sende"
                     recording -> "Slipp for å sende"
                     speaking -> "Hold inne for å avbryte"
@@ -201,7 +222,7 @@ private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Un
             )
             if (status == LiveStatus.Listening) {
                 Text(
-                    "Eller trykk én gang for å starte, og én gang til for å sende",
+                    if (handsFree) "Bare snakk. Trykk hvis du vil sende med en gang." else "Eller trykk én gang for å starte, og én gang til for å sende",
                     style = MaterialTheme.typography.labelMedium,
                     color = White.copy(alpha = 0.5f),
                     textAlign = TextAlign.Center,
@@ -281,6 +302,26 @@ private fun RouteChip(route: String, modifier: Modifier = Modifier) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
+        )
+    }
+}
+
+/** Slår håndfri på og av, så man kan låse skjermen og bare snakke. */
+@Composable
+private fun HandsFreeToggle(on: Boolean, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(if (on) White else White.copy(alpha = 0.1f))
+            .clickable(onClick = onClick),
+    ) {
+        Icon(
+            Icons.Rounded.GraphicEq,
+            contentDescription = if (on) "Slå av håndfri" else "Slå på håndfri",
+            tint = if (on) Color.Black else White.copy(alpha = 0.85f),
+            modifier = Modifier.size(22.dp),
         )
     }
 }

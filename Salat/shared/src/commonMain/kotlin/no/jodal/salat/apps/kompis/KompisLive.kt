@@ -82,7 +82,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
             return
         }
         if (engine == KompisEngine.OpenRouter) {
-            state = state.copy(pushToTalk = true)
+            state = state.copy(pushToTalk = true, handsFree = store.data.settings.handsFree)
             // En ny samtale lagres først når noe er sagt, så tomme samtaler ikke blir liggende.
             if (continuing != null) save(conversation)
             val started = OpenRouterPipeline(store, bridge, this)
@@ -122,6 +122,20 @@ class KompisLive private constructor(private val store: KompisStore, private val
     /** Knappen slippes, eller trykkes én gang til. */
     fun talkStop() {
         pipeline?.talkStop()
+    }
+
+    /** Et trykk på knappen i håndfri modus. */
+    fun talkTap() {
+        pipeline?.tap()
+    }
+
+    /** Bytter mellom håndfri og knapp. Valget huskes til neste samtale. */
+    fun toggleHandsFree() {
+        val pipeline = pipeline ?: return
+        val on = !store.data.settings.handsFree
+        store.update { it.copy(settings = it.settings.copy(handsFree = on)) }
+        state = state.copy(handsFree = on)
+        pipeline.handsFreeChanged()
     }
 
     private fun stopPipeline() {
