@@ -26,11 +26,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -198,17 +196,13 @@ fun ConversationScreen(
     }
 
     if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Slette samtalen?") },
-            text = { Text("«${conversation.title}» blir borte for godt.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete()
-                }) { Text("Slett", color = colors.error) }
+        DeleteConversationDialog(
+            title = conversation.title,
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Avbryt") } },
+            onDismiss = { confirmDelete = false },
         )
     }
 }

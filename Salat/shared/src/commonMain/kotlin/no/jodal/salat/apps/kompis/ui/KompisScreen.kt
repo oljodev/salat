@@ -9,7 +9,18 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,9 +96,6 @@ private sealed interface KompisDestination {
     data object Home : KompisDestination
     data class Chat(val id: String) : KompisDestination
     data class Live(val conversationId: String?) : KompisDestination
-    data object SttTest : KompisDestination
-    data object LlmTest : KompisDestination
-    data object TtsTest : KompisDestination
 }
 
 @Composable
@@ -116,8 +124,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                         slideInVertically(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     initialState is KompisDestination.Live ->
                         fadeIn(tween(duration)) togetherWith slideOutVertically(tween(duration)) { it }
-                    targetState is KompisDestination.Chat || targetState is KompisDestination.SttTest || targetState is KompisDestination.LlmTest ||
-                        targetState is KompisDestination.TtsTest ->
+                    targetState is KompisDestination.Chat ->
                         slideInHorizontally(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     else -> fadeIn(tween(duration)) togetherWith slideOutHorizontally(tween(duration)) { it }
                 }
@@ -134,27 +141,6 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                     },
                     onReturnToLive = { destination = KompisDestination.Live(live.conversationId) },
                     onOpen = { destination = KompisDestination.Chat(it.id) },
-                    onSettings = { showSettings = true },
-                    onSttTest = { destination = KompisDestination.SttTest },
-                    onLlmTest = { destination = KompisDestination.LlmTest },
-                    onTtsTest = { destination = KompisDestination.TtsTest },
-                )
-                KompisDestination.TtsTest -> TtsTestScreen(
-                    store = store,
-                    bridge = bridge,
-                    onBack = { destination = KompisDestination.Home },
-                    onSettings = { showSettings = true },
-                )
-                KompisDestination.LlmTest -> LlmTestScreen(
-                    store = store,
-                    bridge = bridge,
-                    onBack = { destination = KompisDestination.Home },
-                    onSettings = { showSettings = true },
-                )
-                KompisDestination.SttTest -> SttTestScreen(
-                    store = store,
-                    bridge = bridge,
-                    onBack = { destination = KompisDestination.Home },
                     onSettings = { showSettings = true },
                 )
                 is KompisDestination.Chat -> {
@@ -225,14 +211,28 @@ fun KompisHome(
     onReturnToLive: () -> Unit,
     onOpen: (Conversation) -> Unit,
     onSettings: () -> Unit,
-    onSttTest: () -> Unit,
-    onLlmTest: () -> Unit,
-    onTtsTest: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val now = store.nowMillis()
     val conversations = store.data.conversations.sortedByDescending { it.updatedAtMillis }
     val grouped = conversations.groupBy { periodOf(it.updatedAtMillis, now) }
+    var swipedOpen by remember { mutableStateOf<String?>(null) }
+    var toDelete by remember { mutableStateOf<Conversation?>(null) }
+
+    toDelete?.let { conversation ->
+        DeleteConversationDialog(
+            title = conversation.title,
+            onConfirm = {
+                store.deleteConversation(conversation.id)
+                toDelete = null
+                swipedOpen = null
+            },
+            onDismiss = {
+                toDelete = null
+                swipedOpen = null
+            },
+        )
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(colors.background),
@@ -258,15 +258,6 @@ fun KompisHome(
         }
         if (!store.hasKeyFor(store.engine)) {
             item(key = "key") { ApiKeyRow(store.engine, onClick = onSettings) }
-        }
-        item(key = "stt") {
-            TestRow(Icons.Rounded.Mic, "Test tale til tekst", "Prøv modeller fra OpenRouter, og se hvor raskt teksten kommer.", onSttTest)
-        }
-        item(key = "llm") {
-            TestRow(Icons.Rounded.Forum, "Test språkmodell", "Chat med en modell fra OpenRouter, og se hvor raskt svarene kommer.", onLlmTest)
-        }
-        item(key = "tts") {
-            TestRow(Icons.Rounded.RecordVoiceOver, "Test tekst til tale", "Hør hvordan stemmene fra OpenRouter leser norsk.", onTtsTest)
         }
 
         item(key = "heading") {
@@ -300,7 +291,17 @@ fun KompisHome(
             items.forEachIndexed { index, conversation ->
                 item(key = conversation.id) {
                     if (index > 0) HorizontalDivider(color = colors.outlineVariant)
-                    ConversationRow(conversation, now, onClick = { onOpen(conversation) })
+                    SwipeToDelete(
+                        open = swipedOpen == conversation.id,
+                        onOpenChange = { swipedOpen = if (it) conversation.id else null },
+                        onDelete = { toDelete = conversation },
+                    ) {
+                        ConversationRow(
+                            conversation,
+                            now,
+                            onClick = { if (swipedOpen != null) swipedOpen = null else onOpen(conversation) },
+                        )
+                    }
                 }
             }
         }
@@ -433,31 +434,53 @@ private fun ApiKeyRow(engine: KompisEngine, onClick: () -> Unit) {
     }
 }
 
-/** Fører til en av testene på veien mot Kompis med OpenRouter. */
+/** Dra raden mot venstre for å vise en rød søppelkasse. */
 @Composable
-private fun TestRow(icon: ImageVector, title: String, description: String, onClick: () -> Unit) {
+private fun SwipeToDelete(
+    open: Boolean,
+    onOpenChange: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+    content: @Composable () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = Modifier
-            .padding(top = 16.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .border(1.dp, colors.outlineVariant, RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = colors.onSurface)
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-            )
+    val reveal = with(LocalDensity.current) { 84.dp.toPx() }
+    val offset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(open) { offset.animateTo(if (open) -reveal else 0f, spring(stiffness = 600f)) }
+
+    Box(Modifier.fillMaxWidth()) {
+        Box(
+            contentAlignment = Alignment.CenterEnd,
+            modifier = Modifier.matchParentSize().padding(end = 18.dp).alpha((-offset.value / reveal).coerceIn(0f, 1f)),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(48.dp).clip(CircleShape).background(KompisPalette.EndCall).clickable(onClick = onDelete),
+            ) {
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = "Slett samtalen", tint = Color.White, modifier = Modifier.size(24.dp))
+            }
         }
-        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant)
+        Box(
+            Modifier
+                .offset { IntOffset(offset.value.roundToInt(), 0) }
+                .fillMaxWidth()
+                .background(colors.background)
+                .pointerInput(Unit) {
+                    fun settle() {
+                        val opens = offset.value < -reveal / 2
+                        scope.launch { offset.animateTo(if (opens) -reveal else 0f, spring(stiffness = 600f)) }
+                        onOpenChange(opens)
+                    }
+                    detectHorizontalDragGestures(
+                        onDragEnd = ::settle,
+                        onDragCancel = ::settle,
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            scope.launch { offset.snapTo((offset.value + dragAmount).coerceIn(-reveal, 0f)) }
+                        },
+                    )
+                },
+        ) { content() }
     }
 }
 
