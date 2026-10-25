@@ -34,8 +34,26 @@ enum class Role {
     @SerialName("kompis") Kompis,
 }
 
+/** Hva som står for samtalen: Gemini Live alene, eller tale til tekst, en språkmodell og tekst til tale hver for seg. */
+enum class KompisEngine(val id: String, val label: String, val description: String) {
+    GeminiLive("gemini", "Gemini Live", "Én modell hører og snakker. Bruker Gemini-nøkkelen."),
+    OpenRouter("openrouter", "OpenRouter", "Tale til tekst, språkmodell og tekst til tale hver for seg. Bruker OpenRouter-nøkkelen."),
+    ;
+
+    companion object {
+        fun byId(id: String): KompisEngine = entries.firstOrNull { it.id == id } ?: GeminiLive
+    }
+
+    /** Hvem nøkkelen er fra, f.eks. «Gemini». */
+    val keyName: String get() = when (this) {
+        GeminiLive -> "Gemini"
+        OpenRouter -> "OpenRouter"
+    }
+}
+
 @Serializable
 data class KompisSettings(
+    val engine: String = KompisEngine.GeminiLive.id,
     val voice: String = KompisVoice.Kore.id,
     val personality: String = DefaultPersonality,
     /** Modellen og språket i testen av tale til tekst. Tomt språk betyr at modellen finner det selv. */

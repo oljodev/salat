@@ -71,6 +71,7 @@ import kotlinx.coroutines.delay
 import no.jodal.salat.DeepLinks
 import no.jodal.salat.NativeBridge
 import no.jodal.salat.apps.kompis.Conversation
+import no.jodal.salat.apps.kompis.KompisEngine
 import no.jodal.salat.apps.kompis.KompisLive
 import no.jodal.salat.apps.kompis.KompisStore
 import no.jodal.salat.apps.kompis.Period
@@ -253,8 +254,8 @@ fun KompisHome(
         item(key = "start") {
             if (live.isActive) OngoingRow(live, onClick = onReturnToLive) else StartButton(onStart)
         }
-        if (!store.hasApiKey) {
-            item(key = "key") { ApiKeyRow(onClick = onSettings) }
+        if (!store.hasKeyFor(store.engine)) {
+            item(key = "key") { ApiKeyRow(store.engine, onClick = onSettings) }
         }
         item(key = "stt") {
             TestRow(Icons.Rounded.Mic, "Test tale til tekst", "Prøv modeller fra OpenRouter, og se hvor raskt teksten kommer.", onSttTest)
@@ -401,7 +402,7 @@ private fun OngoingRow(live: KompisLive, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ApiKeyRow(onClick: () -> Unit) {
+private fun ApiKeyRow(engine: KompisEngine, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -416,9 +417,12 @@ private fun ApiKeyRow(onClick: () -> Unit) {
     ) {
         Icon(Icons.Rounded.Key, contentDescription = null, tint = colors.onSurface)
         Column(Modifier.weight(1f)) {
-            Text("Legg inn Gemini-nøkkel", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+            Text("Legg inn ${engine.keyName}-nøkkel", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
             Text(
-                "Kompis trenger en nøkkel fra Google AI Studio for å snakke.",
+                when (engine) {
+                    KompisEngine.GeminiLive -> "Kompis trenger en nøkkel fra Google AI Studio for å snakke."
+                    KompisEngine.OpenRouter -> "Kompis trenger en nøkkel fra OpenRouter for å snakke."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
             )

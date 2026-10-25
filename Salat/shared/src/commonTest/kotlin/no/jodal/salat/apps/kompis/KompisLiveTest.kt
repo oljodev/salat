@@ -3,6 +3,7 @@ package no.jodal.salat.apps.kompis
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
@@ -124,5 +125,45 @@ class KompisLiveTest {
     fun titles() {
         assertEquals("Kan du hjelpe meg med middag", KompisLive.titleFrom("Kan du hjelpe meg med middag? Jeg har egg."))
         assertEquals(46, KompisLive.titleFrom("a".repeat(80)).length)
+    }
+
+    @Test
+    fun geminiLiveIsTheDefaultEngine() {
+        assertEquals(KompisEngine.GeminiLive, store.engine)
+        live.start(continuing = null)
+        assertTrue(bridge.startedWith != null)
+    }
+
+    @Test
+    fun theOpenRouterEngineNeedsItsOwnKey() {
+        store.saveOpenRouterKey("")
+        store.update { it.copy(settings = it.settings.copy(engine = KompisEngine.OpenRouter.id)) }
+        assertEquals(KompisEngine.OpenRouter, store.engine)
+
+        live.start(continuing = null)
+        assertEquals(LiveStatus.NeedsApiKey, live.state.status)
+        assertEquals("Legg inn en OpenRouter-nøkkel i innstillingene for å snakke med Kompis.", live.state.message)
+        assertFalse(live.isActive)
+        assertNull(bridge.startedWith, "Gemini skal ikke startes")
+    }
+
+    @Test
+    fun theOpenRouterEngineDoesNotStartGeminiOrSaveAConversationYet() {
+        store.saveOpenRouterKey("or-key")
+        store.update { it.copy(settings = it.settings.copy(engine = KompisEngine.OpenRouter.id)) }
+
+        live.start(continuing = null)
+        assertEquals(LiveStatus.Failed, live.state.status)
+        assertFalse(live.isActive)
+        assertNull(bridge.startedWith)
+        assertEquals(emptyList(), store.data.conversations)
+    }
+
+    @Test
+    fun theGeminiKeyDoesNotCountForTheOpenRouterEngine() {
+        assertTrue(store.hasKeyFor(KompisEngine.GeminiLive))
+        store.saveOpenRouterKey("")
+        assertFalse(store.hasKeyFor(KompisEngine.OpenRouter))
+        assertEquals(KompisEngine.GeminiLive, KompisEngine.byId("noe-ukjent"))
     }
 }

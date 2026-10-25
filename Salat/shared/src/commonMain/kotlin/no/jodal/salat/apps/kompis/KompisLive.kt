@@ -62,17 +62,25 @@ class KompisLive private constructor(private val store: KompisStore, private val
             createdAtMillis = now,
             updatedAtMillis = now,
         )
+        val engine = store.engine
+        val hasKey = store.hasKeyFor(engine)
         conversationId = conversation.id
         startedAtMillis = now
         turnsSinceRoll = 0
         state = LiveUiState(
             title = conversation.title,
-            status = if (store.hasApiKey) LiveStatus.Connecting else LiveStatus.NeedsApiKey,
+            status = if (hasKey) LiveStatus.Connecting else LiveStatus.NeedsApiKey,
             messages = conversation.messages,
-            message = if (store.hasApiKey) null else "Legg inn en Gemini-nøkkel i innstillingene for å snakke med Kompis.",
+            message = if (hasKey) null else "Legg inn en ${engine.keyName}-nøkkel i innstillingene for å snakke med Kompis.",
         )
-        if (!store.hasApiKey) {
+        if (!hasKey) {
             conversationId = null
+            return
+        }
+        if (engine == KompisEngine.OpenRouter) {
+            // Motoren med OpenRouter er ikke koblet til samtalen ennå.
+            conversationId = null
+            state = state.copy(status = LiveStatus.Failed, message = "Samtaler med OpenRouter er ikke ferdige ennå. Bruk Gemini Live til da.")
             return
         }
 

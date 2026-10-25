@@ -1,7 +1,6 @@
 package no.jodal.salat.apps.kompis.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import no.jodal.salat.apps.kompis.DefaultPersonality
+import no.jodal.salat.apps.kompis.KompisEngine
 import no.jodal.salat.apps.kompis.KompisStore
 import no.jodal.salat.apps.kompis.KompisVoice
 import no.jodal.salat.apps.rise.ui.SectionDivider
@@ -77,6 +76,7 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
     val colors = MaterialTheme.colorScheme
     var apiKey by remember { mutableStateOf(store.apiKey) }
     var openRouterKey by remember { mutableStateOf(store.openRouterKey) }
+    var engine by remember { mutableStateOf(store.engine) }
     var voice by remember { mutableStateOf(store.data.settings.voice) }
     var personality by remember { mutableStateOf(store.data.settings.personality) }
     val uriHandler = LocalUriHandler.current
@@ -89,7 +89,7 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
                 onClose {
                     store.saveApiKey(apiKey)
                     store.saveOpenRouterKey(openRouterKey)
-                    store.update { it.copy(settings = it.settings.copy(voice = voice, personality = personality.trim().ifEmpty { DefaultPersonality })) }
+                    store.update { it.copy(settings = it.settings.copy(engine = engine.id, voice = voice, personality = personality.trim().ifEmpty { DefaultPersonality })) }
                 }
             }) {
                 Text("Lagre", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
@@ -100,6 +100,25 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
             modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
+            SettingsSection("Motor") {
+                KompisEngine.entries.forEachIndexed { index, option ->
+                    if (index > 0) SectionDivider()
+                    RadioRow(option.label, option.description, selected = option == engine) { engine = option }
+                }
+                if (engine == KompisEngine.OpenRouter) {
+                    SectionDivider()
+                    val settings = store.data.settings
+                    Text(
+                        "Modellene velger du i testene på forsiden:\n" +
+                            "Tale til tekst: ${settings.sttModel.substringAfter('/')}\n" +
+                            "Språkmodell: ${settings.llmModel.substringAfter('/')}\n" +
+                            "Tekst til tale: ${settings.ttsModel.substringAfter('/')}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+            }
+
             SettingsSection("Gemini-nøkkel") {
                 KeyField(apiKey, onValueChange = { apiKey = it })
                 SectionDivider()
@@ -132,35 +151,10 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
                 )
             }
 
-            SettingsSection("Stemme") {
+            SettingsSection("Stemme i Gemini Live") {
                 KompisVoice.entries.forEachIndexed { index, option ->
                     if (index > 0) SectionDivider()
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { voice = option.id },
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(option.id, style = MaterialTheme.typography.bodyLarge)
-                            Text(option.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
-                        val selected = option.id == voice
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .then(
-                                    if (selected) {
-                                        Modifier.background(colors.primary)
-                                    } else {
-                                        Modifier.border(2.dp, colors.outlineVariant, CircleShape)
-                                    },
-                                ),
-                        ) {
-                            if (selected) Icon(Icons.Rounded.Check, contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(16.dp))
-                        }
-                    }
+                    RadioRow(option.id, option.description, selected = option.id == voice) { voice = option.id }
                 }
             }
 
@@ -185,7 +179,8 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
             }
 
             Text(
-                "Kompis bruker Gemini 3.8 Live. Samtalene lagres bare på telefonen.",
+                (if (engine == KompisEngine.GeminiLive) "Kompis bruker Gemini 3.8 Live." else "Kompis bruker modeller fra OpenRouter.") +
+                    " Samtalene lagres bare på telefonen.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -230,5 +225,22 @@ private fun KeyField(value: String, onValueChange: (String) -> Unit) {
                 modifier = Modifier.size(20.dp),
             )
         }
+    }
+}
+
+/** En rad med tittel og beskrivelse, og en rund avkrysning til høyre. */
+@Composable
+private fun RadioRow(title: String, description: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+        RadioDot(selected)
     }
 }

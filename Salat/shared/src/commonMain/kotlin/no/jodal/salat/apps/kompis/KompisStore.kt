@@ -23,6 +23,14 @@ class KompisStore private constructor(private val bridge: NativeBridge) {
 
     val hasOpenRouterKey: Boolean get() = openRouterKey.isNotBlank()
 
+    val engine: KompisEngine get() = KompisEngine.byId(data.settings.engine)
+
+    /** Om nøkkelen til [engine] er lagt inn. */
+    fun hasKeyFor(engine: KompisEngine): Boolean = when (engine) {
+        KompisEngine.GeminiLive -> hasApiKey
+        KompisEngine.OpenRouter -> hasOpenRouterKey
+    }
+
     fun update(transform: (KompisData) -> KompisData) {
         data = transform(data)
         bridge.saveText(StorageKey, json.encodeToString(KompisData.serializer(), data))
