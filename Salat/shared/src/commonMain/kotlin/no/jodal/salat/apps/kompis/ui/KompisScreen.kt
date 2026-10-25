@@ -60,6 +60,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.rounded.Tune
 import no.jodal.salat.resources.Res
+import no.jodal.salat.resources.kompis_bonne
+import no.jodal.salat.resources.kompis_drope
+import no.jodal.salat.resources.kompis_firkant
+import no.jodal.salat.resources.kompis_hjerte
+import no.jodal.salat.resources.kompis_pille
+import no.jodal.salat.resources.kompis_sky
+import no.jodal.salat.resources.kompis_spokelse
+import no.jodal.salat.resources.kompis_stjerne
+import no.jodal.salat.resources.kompis_trekant
 import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.runtime.Composable
