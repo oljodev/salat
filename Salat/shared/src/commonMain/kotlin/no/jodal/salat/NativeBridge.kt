@@ -74,6 +74,12 @@ interface NativeBridge {
     /** Slår av mikrofonen. Et svar som er på vei, kommer likevel. */
     fun kompisSttClose()
 
+    /**
+     * Henter [path] fra OpenRouter sitt API, f.eks. `models/user`, med nøkkelen [apiKey].
+     * [onResult] kalles med svaret, eller med `null` og en feilmelding.
+     */
+    fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit)
+
     // Ekko. Lyden til hver lyd ligger i en fil som heter det samme som lyden sin id.
 
     /** Henter lyden fra YouTube-videoen [videoId] og lagrer den som [clipId]. */
@@ -142,6 +148,12 @@ interface NativeBridge {
 interface SttListener {
     /** Lydnivået fra mikrofonen, fra 0 til 1. */
     fun onLevel(level: Float)
+
+    /** Mikrofonen virker. [name] er hvilken det er, f.eks. «iPhone-mikrofon» eller «AirPods Pro». */
+    fun onMicrophone(name: String)
+
+    /** Mikrofonen kunne ikke startes. */
+    fun onMicrophoneError(message: String)
 
     /**
      * Svaret fra OpenRouter kom. [responseJson] er svaret som det er, [audioSeconds] hvor langt

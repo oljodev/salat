@@ -72,6 +72,7 @@ private object PreviewBridge : NativeBridge {
 
     override fun kompisSttOpen(listener: SttListener) {
         sttListener = listener
+        listener.onMicrophone("Mikrofon på PC-en")
     }
 
     override fun kompisSttStartRecording() = sttListener?.onLevel(0.5f) ?: Unit
@@ -89,6 +90,15 @@ private object PreviewBridge : NativeBridge {
     override fun kompisSttClose() {
         sttListener = null
     }
+
+    override fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit) = onResult(
+        """{"data":[
+            {"id":"openai/whisper-1","name":"OpenAI: Whisper","created":1700000000},
+            {"id":"mistralai/voxtral-mini-transcribe-3-0","name":"Mistral: Voxtral Mini Transcribe 3","created":1792540800},
+            {"id":"elevenlabs/scribe-v2","name":"ElevenLabs: Scribe v2","created":1791331200}
+        ]}""",
+        null,
+    )
 
     // Ekko: later som lyden er hentet med en gang, med en tilfeldig lydbølge.
 

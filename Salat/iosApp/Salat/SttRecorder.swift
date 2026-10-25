@@ -13,10 +13,6 @@ final class SttRecorder {
         let language: String?
     }
 
-    private static let transcriptionsUrl = URL(string: "https://openrouter.ai/api/v1/audio/transcriptions")!
-    /// Et lite kall som bare åpner forbindelsen til OpenRouter, så opptaket ikke må vente på det.
-    private static let warmUpUrl = URL(string: "https://openrouter.ai/api/v1/key")!
-
     private var listener: SttListener?
     private var isOpen = false
 
@@ -36,31 +32,38 @@ final class SttRecorder {
     private var preRollBytes = 0
     /// Omtrent 0,3 sekunder.
     private static let maxPreRollBytes = 16_000 * 2 * 3 / 10
+    /// Hvor mange lydbiter mikrofonen har gitt, for å se om den virker.
+    private var micBuffers = 0
     private var lastLevelUpdate = Date.distantPast
+
+    // Diagnose, så feilmeldingene kan si hva som faktisk skjedde.
+    private var recordingStartedAt: Date?
+    /// Om ekkodempingen er på. Den slås av hvis mikrofonen ikke virker med den.
+    private var voiceProcessing = true
+    private var startError: String?
 
     // MARK: - Start og stopp
 
     func open(listener: SttListener) {
         close()
         guard !LiveSession.shared.isRunning else {
-            listener.onError(message: "Avslutt samtalen med Kompis først.")
+            listener.onMicrophoneError(message: "Avslutt samtalen med Kompis først.")
             return
         }
         self.listener = listener
         isOpen = true
-        warmUp()
+        voiceProcessing = true
+        startError = nil
+        OpenRouter.warmUp()
 
         Task { @MainActor in
             guard await AVAudioApplication.requestRecordPermission() else {
-                self.listener?.onError(message: "Kompis trenger tilgang til mikrofonen. Slå det på i Innstillinger → Apper → Salat.")
+                self.startError = "Kompis har ikke tilgang til mikrofonen. Slå det på i Innstillinger → Apper → Salat."
+                self.listener?.onMicrophoneError(message: self.startError!)
                 return
             }
             guard self.isOpen else { return }
-            do {
-                try self.startAudio()
-            } catch {
-                self.listener?.onError(message: "Kunne ikke starte mikrofonen: \(error.localizedDescription)")
-            }
+            self.startMicrophone()
         }
     }
 
@@ -68,10 +71,9 @@ final class SttRecorder {
         guard isOpen else { return }
         isOpen = false
         listener = nil
-        engine.inputNode.removeTap(onBus: 0)
-        player.stop()
-        engine.stop()
+        stopAudio()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        NotificationCenter.default.removeObserver(self)
         lock.lock()
         isRecording = false
         recorded = Data()
@@ -81,20 +83,29 @@ final class SttRecorder {
     }
 
     func startRecording() {
-        warmUp()
+        OpenRouter.warmUp()
+        recordingStartedAt = Date()
         lock.lock()
+        let buffers = micBuffers
         recorded = preRoll.reduce(into: Data()) { $0.append($1) }
         preRoll = []
         preRollBytes = 0
         isRecording = true
         lock.unlock()
+        // Har mikrofonen aldri gitt lyd, prøv å starte den på nytt.
+        if buffers == 0, isOpen {
+            startMicrophone()
+        }
     }
 
     func stopRecording(configJson: String) {
         let stoppedAt = Date()
+        let heldSeconds = recordingStartedAt.map { stoppedAt.timeIntervalSince($0) } ?? 0
+        recordingStartedAt = nil
         lock.lock()
         isRecording = false
         let pcm = recorded
+        let buffers = micBuffers
         recorded = Data()
         lock.unlock()
 
@@ -104,7 +115,7 @@ final class SttRecorder {
         }
         let seconds = Double(pcm.count / 2) / recordFormat.sampleRate
         guard seconds >= 0.5 else {
-            listener?.onError(message: "Opptaket var for kort. Hold inne knappen mens du snakker.")
+            listener?.onError(message: Self.tooShortMessage(seconds: seconds, heldSeconds: heldSeconds, micBuffers: buffers, startError: startError))
             return
         }
 
@@ -115,9 +126,9 @@ final class SttRecorder {
         if let language = config.language {
             body["language"] = language
         }
-        var request = URLRequest(url: Self.transcriptionsUrl)
+        var request = URLRequest(url: URL(string: "audio/transcriptions", relativeTo: OpenRouter.baseUrl)!)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = 60
         request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -139,46 +150,85 @@ final class SttRecorder {
                         millis: millis
                     )
                 } else {
-                    listener?.onError(message: Self.errorMessage(status: status, data: data))
+                    listener?.onError(message: OpenRouter.errorMessage(status: status, data: data))
                 }
             }
         }.resume()
     }
 
-    /// Åpner forbindelsen til OpenRouter, så sendingen ikke må vente på at den kobles opp. Svaret
-    /// er uinteressant; det viktige er at forbindelsen er klar til den gjenbrukes.
-    private func warmUp() {
-        var request = URLRequest(url: Self.warmUpUrl)
-        request.timeoutInterval = 10
-        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
-    }
-
-    private static func errorMessage(status: Int, data: Data?) -> String {
-        let message = data
-            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-            .flatMap { $0["error"] as? [String: Any] }
-            .flatMap { $0["message"] as? String }
-        switch status {
-        case 401: return "OpenRouter godtok ikke nøkkelen. Sjekk den i innstillingene."
-        case 402: return "Det er ikke nok kreditt på OpenRouter-kontoen."
-        default: return "OpenRouter svarte med feil \(status)" + (message.map { ": \($0)" } ?? ".")
+    /// Forklarer hvorfor det nesten ikke ble noe lyd: knappen, eller mikrofonen.
+    private static func tooShortMessage(seconds: Double, heldSeconds: Double, micBuffers: Int, startError: String?) -> String {
+        if micBuffers == 0 {
+            return "Mikrofonen har ikke gitt noe lyd" + (startError.map { ": \($0)" } ?? ". Gå ut av testen og inn igjen.")
         }
+        if heldSeconds < 0.5 {
+            return "Opptaket var for kort. Hold inne knappen mens du snakker, eller trykk én gang for å starte og én gang til for å sende."
+        }
+        return String(
+            format: "Fikk bare %.1f s lyd på %.1f s. Mikrofonen stoppet underveis, prøv igjen.",
+            seconds,
+            heldSeconds
+        )
     }
 
     // MARK: - Lyd
+
+    /// Starter mikrofonen med ekkodemping, og uten hvis det ikke går. Sjekker etterpå at lyden kommer.
+    private func startMicrophone() {
+        stopAudio()
+        do {
+            try startAudio()
+        } catch where voiceProcessing {
+            voiceProcessing = false
+            stopAudio()
+            do {
+                try startAudio()
+            } catch {
+                microphoneFailed("Kunne ikke starte mikrofonen: \(error.localizedDescription)")
+                return
+            }
+        } catch {
+            microphoneFailed("Kunne ikke starte mikrofonen: \(error.localizedDescription)")
+            return
+        }
+        reportMicrophone()
+        checkMicrophone(after: 1.5)
+    }
+
+    private func microphoneFailed(_ message: String) {
+        startError = message
+        listener?.onMicrophoneError(message: message)
+    }
+
+    /// Gir ikke mikrofonen lyd, prøves den uten ekkodemping, og så sies det fra.
+    private func checkMicrophone(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.isOpen else { return }
+            self.lock.lock()
+            let buffers = self.micBuffers
+            self.lock.unlock()
+            guard buffers == 0 else { return }
+            if self.voiceProcessing {
+                self.voiceProcessing = false
+                self.startMicrophone()
+            } else {
+                self.microphoneFailed("Mikrofonen gir ingen lyd.")
+            }
+        }
+    }
 
     private func startAudio() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playAndRecord,
-            mode: .voiceChat,
+            mode: voiceProcessing ? .voiceChat : .default,
             options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker]
         )
         try session.setActive(true)
 
         let input = engine.inputNode
         // Samme ekkodemping som i samtalene, så testen hører det samme som Kompis vil høre.
-        try input.setVoiceProcessingEnabled(true)
+        try input.setVoiceProcessingEnabled(voiceProcessing)
 
         if player.engine == nil {
             engine.attach(player)
@@ -186,11 +236,17 @@ final class SttRecorder {
         engine.connect(player, to: engine.mainMixerNode, format: playbackFormat)
 
         let inputFormat = input.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            throw NSError(domain: "SttRecorder", code: 1, userInfo: [NSLocalizedDescriptionKey: "Fant ingen mikrofon."])
+        }
         converter = AVAudioConverter(from: inputFormat, to: recordFormat)
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 2048, format: inputFormat) { [weak self] buffer, _ in
             self?.handleMicrophone(buffer)
         }
+        lock.lock()
+        micBuffers = 0
+        lock.unlock()
 
         engine.prepare()
         try engine.start()
@@ -202,6 +258,36 @@ final class SttRecorder {
             silence.floatChannelData?[0].update(repeating: 0, count: 2400)
             player.scheduleBuffer(silence)
         }
+
+        NotificationCenter.default.removeObserver(self)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(routeChanged),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
+    }
+
+    private func stopAudio() {
+        engine.inputNode.removeTap(onBus: 0)
+        player.stop()
+        engine.stop()
+    }
+
+    @objc private func routeChanged() {
+        DispatchQueue.main.async {
+            guard self.isOpen else { return }
+            self.reportMicrophone()
+        }
+    }
+
+    private func reportMicrophone() {
+        let input = AVAudioSession.sharedInstance().currentRoute.inputs.first
+        var name = input?.portType == .builtInMic ? "iPhone-mikrofon" : (input?.portName ?? "Mikrofon")
+        if !voiceProcessing {
+            name += ", uten ekkodemping"
+        }
+        listener?.onMicrophone(name: name)
     }
 
     private func handleMicrophone(_ buffer: AVAudioPCMBuffer) {
@@ -225,6 +311,7 @@ final class SttRecorder {
         let frames = Int(converted.frameLength)
         let data = Data(bytes: samples[0], count: frames * 2)
         lock.lock()
+        micBuffers += 1
         if isRecording {
             recorded.append(data)
         } else {

@@ -6,6 +6,10 @@ internal object FakeBridge : NativeBridge {
     var startedWith: String? = null
     var rolledWith: String? = null
     var sttSentWith: String? = null
+    val openRouterGets = mutableListOf<String>()
+
+    /** Svaret [openRouterGet] gir, eller `null` for å aldri svare. */
+    var openRouterResult: Pair<String?, String?>? = null
 
     /** Det Ekko har bedt Swift om, f.eks. `play clip1 from 2.0` eller `pause`. */
     val ekkoCalls = mutableListOf<String>()
@@ -39,6 +43,10 @@ internal object FakeBridge : NativeBridge {
         sttSentWith = configJson
     }
     override fun kompisSttClose() = Unit
+    override fun openRouterGet(path: String, apiKey: String, onResult: (body: String?, error: String?) -> Unit) {
+        openRouterGets += path
+        openRouterResult?.let { (body, error) -> onResult(body, error) }
+    }
 
     override fun ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) {
         ekkoCalls += "youtube $videoId"

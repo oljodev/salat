@@ -89,6 +89,10 @@ final class IosNativeBridge: NSObject, NativeBridge {
         SttRecorder.shared.close()
     }
 
+    func openRouterGet(path: String, apiKey: String, onResult: @escaping (String?, String?) -> Void) {
+        OpenRouter.get(path: path, apiKey: apiKey, completion: onResult)
+    }
+
     func ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) {
         EkkoImport.shared.youTube(clipId: clipId, videoId: videoId, listener: listener)
     }

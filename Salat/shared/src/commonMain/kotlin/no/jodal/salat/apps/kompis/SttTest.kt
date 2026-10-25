@@ -8,19 +8,6 @@ import kotlinx.serialization.json.Json
 import no.jodal.salat.NativeBridge
 import no.jodal.salat.SttListener
 
-/** Modellene for tale til tekst som kan testes. [id] er navnet hos OpenRouter. */
-enum class SttModel(val id: String, val label: String) {
-    VoxtralMini("mistralai/voxtral-mini-transcribe-3-0", "Voxtral Mini"),
-    VoxtralSmall("mistralai/voxtral-small-transcribe-3-0", "Voxtral Small"),
-    WhisperTurbo("openai/whisper-large-v3-turbo", "Whisper Turbo"),
-    GptMini("openai/gpt-4o-mini-transcribe", "GPT-4o Mini"),
-    ;
-
-    companion object {
-        fun byId(id: String): SttModel = entries.firstOrNull { it.id == id } ?: VoxtralMini
-    }
-}
-
 /** Språket modellen får beskjed om. [code] = `null` lar modellen finne ut av det selv. */
 enum class SttLanguage(val code: String?, val label: String) {
     Auto(null, "Auto"),
@@ -46,7 +33,8 @@ data class SttConfig(
 /** Ett forsøk: hva modellen hørte, og hvor lang tid det tok. */
 data class SttResult(
     val text: String,
-    val model: SttModel,
+    val modelId: String,
+    val modelName: String,
     val language: SttLanguage,
     val audioSeconds: Double,
     val uploadBytes: Int,
@@ -55,12 +43,19 @@ data class SttResult(
     val costUsd: Double?,
 )
 
-/** Testen av tale til tekst: hold inne, snakk, slipp, og se teksten og hvor lang tid det tok. */
+/**
+ * Testen av tale til tekst: hold inne, snakk, slipp, og se teksten og hvor lang tid det tok. Et kort
+ * trykk starter opptaket i stedet, og et trykk til sender det.
+ */
 class SttTest(private val store: KompisStore, private val bridge: NativeBridge) : SttListener {
     var level by mutableStateOf(0f)
         private set
 
     var isRecording by mutableStateOf(false)
+        private set
+
+    /** Opptaket startet med et kort trykk, og stoppes med et trykk til i stedet for å slippe. */
+    var isTapMode by mutableStateOf(false)
         private set
 
     /** Et opptak er sendt, og svaret har ikke kommet. */
@@ -74,21 +69,60 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
     var message by mutableStateOf<String?>(null)
         private set
 
-    val model: SttModel get() = SttModel.byId(store.data.settings.sttModel)
+    /** Mikrofonen som brukes, f.eks. «iPhone-mikrofon» eller «AirPods Pro». */
+    var microphone by mutableStateOf<String?>(null)
+        private set
+
+    /** Hvorfor mikrofonen ikke virker. Blir stående til mikrofonen virker igjen. */
+    var microphoneError by mutableStateOf<String?>(null)
+        private set
+
+    /** Modellene for tale til tekst hos OpenRouter, de nyeste først. */
+    var models by mutableStateOf(cachedModels)
+        private set
+
+    var isLoadingModels by mutableStateOf(false)
+        private set
+
+    var modelsError by mutableStateOf<String?>(null)
+        private set
+
+    val modelId: String get() = store.data.settings.sttModel
     val language: SttLanguage get() = SttLanguage.byCode(store.data.settings.sttLanguage)
 
+    /** Navnet på modellen, f.eks. «Voxtral Mini Transcribe 3», eller id-en før listen er hentet. */
+    fun modelName(id: String): String = models.firstOrNull { it.id == id }?.shortName ?: id.substringAfter('/')
+
     /** Modellen og språket for opptaket som er sendt. */
-    private var pending: Pair<SttModel, SttLanguage>? = null
+    private var pending: Pair<String, SttLanguage>? = null
 
     fun open() = bridge.kompisSttOpen(this)
 
     fun close() {
         bridge.kompisSttClose()
         isRecording = false
+        isTapMode = false
         level = 0f
     }
 
-    fun selectModel(model: SttModel) = store.update { it.copy(settings = it.settings.copy(sttModel = model.id)) }
+    /** Henter modellene på nytt fra OpenRouter. */
+    fun loadModels() {
+        if (!store.hasOpenRouterKey || isLoadingModels) return
+        isLoadingModels = true
+        modelsError = null
+        bridge.openRouterGet(OpenRouter.SttModelsPath, store.openRouterKey) { body, error ->
+            isLoadingModels = false
+            val parsed = body?.let { runCatching { OpenRouter.parseModels(it) }.getOrNull() }
+            if (parsed == null) {
+                modelsError = error ?: "Forsto ikke modellisten fra OpenRouter."
+            } else {
+                models = parsed
+                cachedModels = parsed
+            }
+        }
+    }
+
+    fun selectModel(id: String) = store.update { it.copy(settings = it.settings.copy(sttModel = id)) }
 
     fun selectLanguage(language: SttLanguage) =
         store.update { it.copy(settings = it.settings.copy(sttLanguage = language.code.orEmpty())) }
@@ -101,21 +135,30 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
         }
         message = null
         isRecording = true
+        isTapMode = false
         bridge.kompisSttStartRecording()
+    }
+
+    /** Knappen ble bare trykket kort, eller iOS avbrøt trykket: fortsett til neste trykk. */
+    fun switchToTapMode() {
+        if (isRecording) isTapMode = true
     }
 
     fun stopRecording() {
         if (!isRecording) return
         isRecording = false
+        isTapMode = false
         isWaiting = true
-        pending = model to language
-        val config = SttConfig(apiKey = store.openRouterKey, model = model.id, language = language.code)
+        pending = modelId to language
+        val config = SttConfig(apiKey = store.openRouterKey, model = modelId, language = language.code)
         bridge.kompisSttStopRecording(json.encodeToString(SttConfig.serializer(), config))
     }
 
-    /** Gjennomsnittlig tid for [model], eller `null` hvis den ikke er testet. */
-    fun averageMillis(model: SttModel): Long? =
-        results.filter { it.model == model }.takeIf { it.isNotEmpty() }?.let { r -> r.sumOf { it.millis } / r.size }
+    /** Gjennomsnittlig tid for modellen [id], eller `null` hvis den ikke er testet. */
+    fun averageMillis(id: String): Long? =
+        results.filter { it.modelId == id }.takeIf { it.isNotEmpty() }?.let { r -> r.sumOf { it.millis } / r.size }
+
+    fun attempts(id: String): Int = results.count { it.modelId == id }
 
     // SttListener, kalles fra Swift.
 
@@ -123,8 +166,17 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
         this.level = level
     }
 
+    override fun onMicrophone(name: String) {
+        microphone = name
+        microphoneError = null
+    }
+
+    override fun onMicrophoneError(message: String) {
+        microphoneError = message
+    }
+
     override fun onTranscribed(responseJson: String, audioSeconds: Double, uploadBytes: Int, millis: Long) {
-        val (sentModel, sentLanguage) = pending ?: (model to language)
+        val (sentModel, sentLanguage) = pending ?: (modelId to language)
         pending = null
         isWaiting = false
         val response = runCatching { json.decodeFromString(SttResponse.serializer(), responseJson) }.getOrNull()
@@ -135,7 +187,8 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
         results = listOf(
             SttResult(
                 text = response.text.trim(),
-                model = sentModel,
+                modelId = sentModel,
+                modelName = modelName(sentModel),
                 language = sentLanguage,
                 audioSeconds = audioSeconds,
                 uploadBytes = uploadBytes,
@@ -148,6 +201,7 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
     override fun onError(message: String) {
         pending = null
         isRecording = false
+        isTapMode = false
         isWaiting = false
         this.message = message
     }
@@ -160,5 +214,8 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
 
     private companion object {
         val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+        /** Modellene fra forrige gang, så listen er der med en gang. */
+        var cachedModels = emptyList<OpenRouterModel>()
     }
 }

@@ -33,6 +33,15 @@ fun formatDuration(seconds: Int): String = when {
 fun formatTimer(seconds: Int): String =
     "${(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}"
 
+private val ShortMonths = listOf("jan", "feb", "mar", "apr", "mai", "jun", "jul", "aug", "sep", "okt", "nov", "des")
+
+/** Når en modell kom, f.eks. «20. okt», eller «3. mar 2025» hvis det ikke var i år. */
+fun formatReleased(epochSeconds: Long, nowMillis: Long): String {
+    val date = localDateTime(epochSeconds * 1000).date
+    val thisYear = localDateTime(nowMillis).date.year
+    return "${date.day}. ${ShortMonths[date.month.ordinal]}" + if (date.year != thisYear) " ${date.year}" else ""
+}
+
 /** F.eks. «2,4 s». */
 fun formatSeconds(seconds: Double): String = "${decimal(seconds, 1)} s"
 
