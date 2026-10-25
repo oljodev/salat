@@ -198,6 +198,8 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                         showTranscript = showTranscript,
                         onToggleTranscript = { showTranscript = !showTranscript },
                         onToggleMute = live::toggleMute,
+                        onTalkStart = live::talkStart,
+                        onTalkStop = live::talkStop,
                         onEnd = {
                             live.end()
                             leave()

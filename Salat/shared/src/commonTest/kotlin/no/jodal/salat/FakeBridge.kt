@@ -9,6 +9,14 @@ internal object FakeBridge : NativeBridge {
     val openRouterGets = mutableListOf<String>()
     var chatSentWith: String? = null
     var chatCancelled = false
+    var chatListener: ChatListener? = null
+    var sttListener: SttListener? = null
+    var speechListener: SpeechListener? = null
+
+    /** Det Kompis har bedt Swift om for en samtale med OpenRouter, f.eks. `speak s0` eller `record`. */
+    val pipelineCalls = mutableListOf<String>()
+    var sttStopConfig: String? = null
+    val speechBodies = mutableMapOf<String, String>()
     val ttsCalls = mutableListOf<String>()
     var ttsSentWith: String? = null
 
@@ -41,15 +49,43 @@ internal object FakeBridge : NativeBridge {
     override fun rollLiveSession(historyJson: String) {
         rolledWith = historyJson
     }
-    override fun kompisSttOpen(listener: SttListener) = Unit
-    override fun kompisSttStartRecording() = Unit
+    override fun kompisSttOpen(listener: SttListener) {
+        sttListener = listener
+    }
+    override fun kompisSttStartRecording() {
+        pipelineCalls += "record"
+    }
     override fun kompisSttStopRecording(configJson: String) {
         sttSentWith = configJson
+        sttStopConfig = configJson
+        pipelineCalls += "send"
     }
     override fun kompisSttClose() = Unit
+    override fun kompisConversationClose() {
+        pipelineCalls += "mic closed"
+    }
+    override fun kompisConversationOpen(listener: SttListener) {
+        sttListener = listener
+        pipelineCalls += "mic opened"
+    }
+    override fun speechStart(sampleRate: Int, listener: SpeechListener) {
+        speechListener = listener
+        pipelineCalls += "speech start $sampleRate"
+    }
+    override fun speechEnqueue(id: String, apiKey: String, bodyJson: String) {
+        speechBodies[id] = bodyJson
+        pipelineCalls += "speak $id"
+    }
+    override fun speechFinish() {
+        pipelineCalls += "finish"
+    }
+    override fun speechStop() {
+        pipelineCalls += "speech stop"
+    }
     override fun openRouterWarmUp() = Unit
     override fun openRouterChat(apiKey: String, bodyJson: String, listener: ChatListener) {
         chatSentWith = bodyJson
+        chatListener = listener
     }
     override fun openRouterCancelChat() {
         chatCancelled = true

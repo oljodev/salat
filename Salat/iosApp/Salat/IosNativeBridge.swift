@@ -89,6 +89,31 @@ final class IosNativeBridge: NSObject, NativeBridge {
         SttRecorder.shared.close()
     }
 
+    func kompisConversationOpen(listener: SttListener) {
+        EkkoAudio.shared.pauseForOtherAudio()
+        SttRecorder.shared.open(listener: listener, conversation: true)
+    }
+
+    func kompisConversationClose() {
+        SttRecorder.shared.close(force: true)
+    }
+
+    func speechStart(sampleRate: Int32, listener: SpeechListener) {
+        SpeechQueue.shared.start(sampleRate: Int(sampleRate), listener: listener)
+    }
+
+    func speechEnqueue(id: String, apiKey: String, bodyJson: String) {
+        SpeechQueue.shared.enqueue(id: id, apiKey: apiKey, bodyJson: bodyJson)
+    }
+
+    func speechFinish() {
+        SpeechQueue.shared.finish()
+    }
+
+    func speechStop() {
+        SpeechQueue.shared.stop()
+    }
+
     func openRouterGet(path: String, apiKey: String, onResult: @escaping (String?, String?) -> Void) {
         OpenRouter.get(path: path, apiKey: apiKey, completion: onResult)
     }

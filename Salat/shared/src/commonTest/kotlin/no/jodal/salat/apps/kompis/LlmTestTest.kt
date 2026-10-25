@@ -24,6 +24,7 @@ class LlmTestTest {
     fun setUp() {
         bridge.chatSentWith = null
         bridge.chatCancelled = false
+        ModelCache.llm = emptyList()
         bridge.openRouterGets.clear()
         bridge.openRouterResult = null
         store = KompisStore.get(bridge)

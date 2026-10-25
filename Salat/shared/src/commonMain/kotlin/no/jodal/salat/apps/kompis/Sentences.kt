@@ -22,4 +22,34 @@ object Sentences {
 
     /** Om [text] har minst én hel setning. */
     fun hasComplete(text: String): Boolean = end.containsMatchIn(text)
+
+    /** Hvor lang en setning uten punktum kan bli før den deles ved et komma, så stemmen kan begynne. */
+    const val MaxClause = 140
+
+    /**
+     * Er [rest] (det som er igjen etter de hele setningene) blitt lang, deles den ved siste komma,
+     * semikolon eller kolon, så stemmen slipper å vente på punktum. Gir delen å lese opp og det som er igjen.
+     */
+    fun cutLongClause(rest: String): Pair<String, String>? {
+        if (rest.length < MaxClause) return null
+        val cut = listOf(", ", "; ", ": ").maxOf { rest.lastIndexOf(it) }
+        if (cut < 40) return null
+        return rest.substring(0, cut + 1).trim() to rest.substring(cut + 2)
+    }
+
+    /**
+     * [text] slik den skal leses opp: uten markdown, lister og emojier, som stemmen ellers ville lest
+     * høyt eller snublet i. Tom hvis det ikke er noe å lese.
+     */
+    fun speakable(text: String): String {
+        val kept = text.filter { c ->
+            c != '*' && c != '#' && c != '`' && c != '~' && c != '\uFE0F' && c != '\u200D' &&
+                !c.isSurrogate() && c !in '\u2600'..'\u27BF'
+        }
+        return kept.lines()
+            .map { it.trim().removePrefix("- ").removePrefix("• ").removePrefix("> ") }
+            .joinToString(" ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
 }

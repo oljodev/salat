@@ -277,4 +277,4 @@ private fun TalkButton(test: SttTest) {
 }
 
 /** Kortere trykk enn dette regnes som et trykk, ikke at knappen holdes inne. */
-private val HoldThreshold = 400.milliseconds
+internal val HoldThreshold = 400.milliseconds

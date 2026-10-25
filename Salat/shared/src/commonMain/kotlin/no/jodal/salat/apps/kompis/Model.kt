@@ -37,7 +37,7 @@ enum class Role {
 /** Hva som står for samtalen: Gemini Live alene, eller tale til tekst, en språkmodell og tekst til tale hver for seg. */
 enum class KompisEngine(val id: String, val label: String, val description: String) {
     GeminiLive("gemini", "Gemini Live", "Én modell hører og snakker. Bruker Gemini-nøkkelen."),
-    OpenRouter("openrouter", "OpenRouter", "Tale til tekst, språkmodell og tekst til tale hver for seg. Bruker OpenRouter-nøkkelen."),
+    OpenRouter("openrouter", "OpenRouter", "Tale til tekst, språkmodell og tekst til tale hver for seg. Hold inne en knapp for å snakke. Bruker OpenRouter-nøkkelen."),
     ;
 
     companion object {

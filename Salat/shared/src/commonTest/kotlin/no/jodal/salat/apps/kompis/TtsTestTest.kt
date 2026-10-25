@@ -26,6 +26,7 @@ class TtsTestTest {
     @BeforeTest
     fun setUp() {
         bridge.ttsCalls.clear()
+        ModelCache.tts = emptyList()
         bridge.ttsSentWith = null
         bridge.openRouterGets.clear()
         bridge.openRouterResult = modelsJson to null

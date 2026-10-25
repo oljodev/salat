@@ -7,21 +7,9 @@ import kotlin.time.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.addJsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import no.jodal.salat.ChatListener
 import no.jodal.salat.NativeBridge
 
@@ -70,7 +58,7 @@ class LlmTest(
     var message by mutableStateOf<String?>(null)
         private set
 
-    var models by mutableStateOf(cachedModels)
+    var models by mutableStateOf(ModelCache.llm)
         private set
 
     var isLoadingModels by mutableStateOf(false)
@@ -118,7 +106,7 @@ class LlmTest(
                 modelsError = error ?: "Forsto ikke modellisten fra OpenRouter."
             } else {
                 models = parsed
-                cachedModels = parsed
+                ModelCache.llm = parsed
             }
         }
     }
@@ -187,57 +175,28 @@ class LlmTest(
     }
 
     /** Forespørselen til `chat/completions`, med hele samtalen. */
-    internal fun requestBody(): String = buildJsonObject {
-        put("model", modelId)
-        put("stream", true)
-        put("temperature", 0.7)
-        put("max_tokens", 600)
-        putJsonArray("messages") {
-            addJsonObject {
-                put("role", "system")
-                put("content", prompt())
-            }
-            for (m in messages) {
-                addJsonObject {
-                    put("role", if (m.role == Role.User) "user" else "assistant")
-                    put("content", m.text)
-                }
-            }
-        }
-        // Tenking før svaret gjør at det tar mye lengre tid før noe kan leses opp.
-        // Før modellisten er hentet, er det trygt å be om ingen tenking.
-        val model = models.firstOrNull { it.id == modelId }
-        val reasoning = model?.reasoning
-        when {
-            model == null -> putJsonObject("reasoning") { put("effort", "none") }
-            reasoning == null || reasoning.mandatory -> Unit
-            reasoning.supportsNone -> putJsonObject("reasoning") { put("effort", "none") }
-            else -> putJsonObject("reasoning") { put("enabled", false) }
-        }
-        if (providerOrder.isNotEmpty()) {
-            putJsonObject("provider") {
-                putJsonArray("order") { providerOrder.forEach { add(it) } }
-                put("allow_fallbacks", false)
-            }
-        }
-    }.toString()
+    internal fun requestBody(): String = LlmRequest.body(
+        modelId = modelId,
+        providers = providerOrder,
+        model = models.firstOrNull { it.id == modelId },
+        prompt = prompt(),
+        messages = messages.map { it.role to it.text },
+    )
 
     // ChatListener, kalles fra Swift.
 
     override fun onEvent(dataJson: String, millis: Long) {
         if (!isStreaming) return
-        val event = runCatching { json.parseToJsonElement(dataJson).jsonObject }.getOrNull() ?: return
-        event["error"]?.let { error ->
+        val chunk = parseChatChunk(dataJson) ?: return
+        chunk.error?.let { error ->
             bridge.openRouterCancelChat()
-            onError(error.jsonObjectOrNull()?.string("message") ?: "OpenRouter ga en feil midt i svaret.")
+            onError(error)
             return
         }
-        event.string("provider")?.let { provider = it }
-        (event["usage"]?.jsonObjectOrNull())?.let { usage = it }
+        chunk.provider?.let { provider = it }
+        chunk.usage?.let { usage = it }
 
-        val choice = (event["choices"] as? JsonArray)?.firstOrNull()?.jsonObjectOrNull()
-        val delta = choice?.get("delta")?.jsonObjectOrNull() ?: return
-        val content = delta.string("content").orEmpty()
+        val content = chunk.content
         if (content.isEmpty()) return
         if (firstTokenMillis == null) firstTokenMillis = millis
         answer.append(content)
@@ -269,18 +228,5 @@ class LlmTest(
     override fun onError(message: String) {
         draft = null
         this.message = message
-    }
-
-    private companion object {
-        val json = Json { ignoreUnknownKeys = true }
-
-        /** Modellene fra forrige gang, så listen er der med en gang. */
-        var cachedModels = emptyList<OpenRouterModel>()
-
-        fun JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject
-
-        fun JsonObject.string(key: String): String? = (get(key) as? JsonPrimitive)?.contentOrNull
-
-        fun JsonObject.int(key: String): Int? = (get(key) as? JsonPrimitive)?.intOrNull
     }
 }

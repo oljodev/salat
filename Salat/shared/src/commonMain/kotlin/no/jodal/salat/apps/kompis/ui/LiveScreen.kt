@@ -1,6 +1,21 @@
 package no.jodal.salat.apps.kompis.ui
 
 import androidx.compose.animation.AnimatedContent
+import no.jodal.salat.apps.kompis.formatTimings
+import no.jodal.salat.apps.kompis.TurnTimings
+import no.jodal.salat.Haptics
+import kotlin.time.TimeSource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.alpha
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,6 +73,7 @@ enum class LiveStatus(val label: String, val voice: VoiceMode) {
     NeedsApiKey("Mangler nøkkel", VoiceMode.Idle),
     Connecting("Kobler til", VoiceMode.Thinking),
     Listening("Lytter", VoiceMode.Listening),
+    Recording("Tar opp", VoiceMode.Listening),
     Thinking("Tenker", VoiceMode.Thinking),
     Speaking("Snakker", VoiceMode.Speaking),
     Reconnecting("Kobler til igjen", VoiceMode.Thinking),
@@ -84,6 +100,10 @@ data class LiveUiState(
     val message: String? = null,
     /** Hva som skjer i tilkoblingen, vist nederst i teksten for å finne feil. */
     val debug: String? = null,
+    /** Man holder inne en knapp for å snakke, i stedet for at mikrofonen alltid er på. */
+    val pushToTalk: Boolean = false,
+    /** Hvor raskt forrige tur gikk, når samtalen går gjennom OpenRouter. */
+    val timings: TurnTimings? = null,
 )
 
 private val White = Color.White
@@ -95,6 +115,8 @@ fun LiveScreen(
     showTranscript: Boolean,
     onToggleTranscript: () -> Unit,
     onToggleMute: () -> Unit,
+    onTalkStart: () -> Unit,
+    onTalkStop: () -> Unit,
     onEnd: () -> Unit,
     onMinimize: () -> Unit,
 ) {
@@ -114,7 +136,7 @@ fun LiveScreen(
             ) { transcript ->
                 if (transcript) Transcript(state) else Captions(state)
             }
-            Controls(state, onToggleMute = onToggleMute, onEnd = onEnd)
+            Controls(state, onToggleMute = onToggleMute, onTalkStart = onTalkStart, onTalkStop = onTalkStop, onEnd = onEnd)
         }
     }
 }
@@ -189,7 +211,11 @@ private fun Captions(state: LiveUiState) {
     ) {
         if (current == null) {
             Text(
-                if (state.status == LiveStatus.Listening) "Si noe, så svarer Kompis." else state.status.label + " …",
+                when {
+                    state.status == LiveStatus.Listening && state.pushToTalk -> "Hold inne knappen for å snakke."
+                    state.status == LiveStatus.Listening -> "Si noe, så svarer Kompis."
+                    else -> state.status.label + " …"
+                },
                 fontSize = 28.sp,
                 lineHeight = 36.sp,
                 fontWeight = FontWeight.Medium,
@@ -251,14 +277,31 @@ private fun Transcript(state: LiveUiState) {
 }
 
 @Composable
-private fun Controls(state: LiveUiState, onToggleMute: () -> Unit, onEnd: () -> Unit) {
+private fun Controls(
+    state: LiveUiState,
+    onToggleMute: () -> Unit,
+    onTalkStart: () -> Unit,
+    onTalkStop: () -> Unit,
+    onEnd: () -> Unit,
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
     ) {
+        state.timings?.takeIf { state.pushToTalk }?.let {
+            Text(
+                formatTimings(it),
+                style = MaterialTheme.typography.labelSmall,
+                color = White.copy(alpha = 0.55f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(
+            if (state.pushToTalk) {
+                TalkButton(state, onStart = onTalkStart, onStop = onTalkStop)
+            } else Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(64.dp)
@@ -295,11 +338,82 @@ private fun Controls(state: LiveUiState, onToggleMute: () -> Unit, onEnd: () -> 
                 modifier = Modifier.size(15.dp),
             )
             Text(
-                "${state.audioRoute}  ·  Du kan låse skjermen",
+                if (state.pushToTalk) state.audioRoute else "${state.audioRoute}  ·  Du kan låse skjermen",
                 style = MaterialTheme.typography.labelMedium,
                 color = White.copy(alpha = 0.55f),
             )
         }
+    }
+}
+
+/**
+ * Knappen for å snakke. Holdes den inne, sendes opptaket når man slipper. Et kort trykk starter
+ * opptaket, og neste trykk sender det. Trykker man mens Kompis snakker, avbrytes Kompis.
+ */
+@Composable
+private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Unit) {
+    val recording = state.status == LiveStatus.Recording
+    val ready = state.status in setOf(LiveStatus.Listening, LiveStatus.Recording, LiveStatus.Thinking, LiveStatus.Speaking)
+    var tapMode by remember { mutableStateOf(false) }
+    LaunchedEffect(recording) { if (!recording) tapMode = false }
+    val isRecording by rememberUpdatedState(recording)
+    val isReady by rememberUpdatedState(ready)
+    val start by rememberUpdatedState(onStart)
+    val stop by rememberUpdatedState(onStop)
+    val scale by animateFloatAsState(if (recording) 1.1f else 1f)
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(88.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .alpha(if (ready) 1f else 0.4f)
+                .clip(CircleShape)
+                .background(if (recording) Brush.linearGradient(KompisPalette.Aurora) else Brush.linearGradient(listOf(White.copy(alpha = 0.16f), White.copy(alpha = 0.16f))))
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            if (isRecording) {
+                                // Det andre trykket i trykk-modus.
+                                Haptics.tap()
+                                stop()
+                                return@detectTapGestures
+                            }
+                            if (!isReady) return@detectTapGestures
+                            Haptics.firm()
+                            start()
+                            val pressedAt = TimeSource.Monotonic.markNow()
+                            val released = tryAwaitRelease()
+                            if (released && pressedAt.elapsedNow() >= HoldThreshold) {
+                                Haptics.tap()
+                                stop()
+                            } else {
+                                tapMode = true
+                            }
+                        },
+                    )
+                },
+        ) {
+            if (recording) {
+                VoiceBars(level = state.level, color = White, barWidth = 4.dp, modifier = Modifier.height(30.dp))
+            } else {
+                Icon(Icons.Rounded.Mic, contentDescription = "Hold inne og snakk", tint = White, modifier = Modifier.size(34.dp))
+            }
+        }
+        Text(
+            when {
+                recording && tapMode -> "Trykk for å sende"
+                recording -> "Slipp for å sende"
+                state.status == LiveStatus.Speaking -> "Hold inne for å avbryte"
+                else -> "Hold inne og snakk"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = White.copy(alpha = 0.7f),
+        )
     }
 }
 

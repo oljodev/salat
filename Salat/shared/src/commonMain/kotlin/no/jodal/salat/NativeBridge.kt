@@ -75,6 +75,33 @@ interface NativeBridge {
     fun kompisSttClose()
 
     /**
+     * Slår på mikrofonen for en samtale med OpenRouter, som [kompisSttOpen], men den kan ikke tas av
+     * testen av tale til tekst mens samtalen pågår. Stenges med [kompisConversationClose].
+     */
+    fun kompisConversationOpen(listener: SttListener)
+
+    /** Slår av mikrofonen til en samtale. */
+    fun kompisConversationClose()
+
+    /**
+     * Gjør klar avspilling av setninger fra tekst til tale gjennom lydoppsettet til mikrofonen, så
+     * ekkodempingen virker. [sampleRate] = 0 lar Swift finne frekvensen. Stopper det som spilles.
+     */
+    fun speechStart(sampleRate: Int, listener: SpeechListener)
+
+    /**
+     * Henter lyden for [bodyJson] (en forespørsel til `audio/speech`) med en gang, og spiller den av
+     * etter de som kom før, uten pause imellom.
+     */
+    fun speechEnqueue(id: String, apiKey: String, bodyJson: String)
+
+    /** Det kommer ingen flere setninger. [SpeechListener.onFinished] kommer når alt er spilt. */
+    fun speechFinish()
+
+    /** Stopper avspillingen og alt som lastes ned, uten å si fra til [SpeechListener]. */
+    fun speechStop()
+
+    /**
      * Henter [path] fra OpenRouter sitt API, f.eks. `models/user`, med nøkkelen [apiKey].
      * [onResult] kalles med svaret, eller med `null` og en feilmelding.
      */
@@ -189,6 +216,27 @@ interface SttListener {
      */
     fun onTranscribed(responseJson: String, audioSeconds: Double, uploadBytes: Int, millis: Long)
 
+    fun onError(message: String)
+}
+
+/** Det som skjer med setningene som leses opp i en samtale. Kalles alltid på hovedtråden. */
+interface SpeechListener {
+    /** Den første lyden til [id] kom, [millis] etter at den ble bedt om. */
+    fun onFirstAudio(id: String, millis: Long)
+
+    /** Lyden til [id] begynner å spilles. */
+    fun onItemStarted(id: String)
+
+    /** Lyden til [id] er spilt ferdig. */
+    fun onItemFinished(id: String)
+
+    /** [speechFinish] er kalt, og alt er spilt. */
+    fun onFinished()
+
+    /** Lydnivået til stemmen, fra 0 til 1. */
+    fun onLevel(level: Float)
+
+    /** Noe gikk galt. Resten av køen er stoppet. */
     fun onError(message: String)
 }
 

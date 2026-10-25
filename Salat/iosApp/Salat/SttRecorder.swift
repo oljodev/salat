@@ -15,10 +15,14 @@ final class SttRecorder {
 
     private var listener: SttListener?
     private var isOpen = false
+    /// En samtale med Kompis eier mikrofonen, så testen av tale til tekst ikke kan ta den.
+    private var isConversation = false
 
-    private let engine = AVAudioEngine()
-    private let player = AVAudioPlayerNode()
-    private let playbackFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
+    /// Lydmotoren og avspilleren brukes også av SpeechQueue, så stemmen går gjennom samme ekkodemping
+    /// som mikrofonen i en samtale.
+    let engine = AVAudioEngine()
+    let player = AVAudioPlayerNode()
+    let playbackFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
     /// Formatet som sendes: 16 kHz, 16-bit, mono. Nok for tale, og lite å laste opp.
     private let recordFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)!
     private var converter: AVAudioConverter?
@@ -44,12 +48,13 @@ final class SttRecorder {
 
     // MARK: - Start og stopp
 
-    func open(listener: SttListener) {
-        close()
-        guard !LiveSession.shared.isRunning else {
+    func open(listener: SttListener, conversation: Bool = false) {
+        guard !LiveSession.shared.isRunning, conversation || !isConversation else {
             listener.onMicrophoneError(message: "Avslutt samtalen med Kompis først.")
             return
         }
+        close(force: true)
+        isConversation = conversation
         self.listener = listener
         isOpen = true
         voiceProcessing = true
@@ -67,9 +72,11 @@ final class SttRecorder {
         }
     }
 
-    func close() {
-        guard isOpen else { return }
+    /// Stenger mikrofonen. Testen av tale til tekst kan ikke stenge mikrofonen til en samtale, med mindre [force].
+    func close(force: Bool = false) {
+        guard isOpen, force || !isConversation else { return }
         isOpen = false
+        isConversation = false
         listener = nil
         stopAudio()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

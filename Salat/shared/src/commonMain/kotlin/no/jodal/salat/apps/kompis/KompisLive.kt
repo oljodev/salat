@@ -35,7 +35,7 @@ data class HistoryTurn(
  * Den pågående samtalen med Gemini Live. Det finnes bare én om gangen, og den fortsetter selv om
  * man går ut av samtaleskjermen.
  */
-class KompisLive private constructor(private val store: KompisStore, private val bridge: NativeBridge) : LiveListener {
+class KompisLive private constructor(private val store: KompisStore, private val bridge: NativeBridge) : PipelineHost {
     var state by mutableStateOf(LiveUiState())
         private set
 
@@ -52,6 +52,9 @@ class KompisLive private constructor(private val store: KompisStore, private val
     /** Hvor mange turer siden forrige gang Kompis startet en ny økt med tekstminne. */
     private var turnsSinceRoll = 0
 
+    /** Samtalen gjennom OpenRouter som pågår, eller `null` når den er med Gemini Live. */
+    private var pipeline: OpenRouterPipeline? = null
+
     /** Starter en ny samtale, eller fortsetter [continuing]. */
     fun start(continuing: Conversation?) {
         if (isActive) return
@@ -64,6 +67,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
         )
         val engine = store.engine
         val hasKey = store.hasKeyFor(engine)
+        pipeline = null
         conversationId = conversation.id
         startedAtMillis = now
         turnsSinceRoll = 0
@@ -78,9 +82,12 @@ class KompisLive private constructor(private val store: KompisStore, private val
             return
         }
         if (engine == KompisEngine.OpenRouter) {
-            // Motoren med OpenRouter er ikke koblet til samtalen ennå.
-            conversationId = null
-            state = state.copy(status = LiveStatus.Failed, message = "Samtaler med OpenRouter er ikke ferdige ennå. Bruk Gemini Live til da.")
+            state = state.copy(pushToTalk = true)
+            // En ny samtale lagres først når noe er sagt, så tomme samtaler ikke blir liggende.
+            if (continuing != null) save(conversation)
+            val started = OpenRouterPipeline(store, bridge, this)
+            pipeline = started
+            started.start(conversation.messages)
             return
         }
 
@@ -98,14 +105,32 @@ class KompisLive private constructor(private val store: KompisStore, private val
 
     fun end() {
         if (!isActive) return
-        bridge.stopLiveSession()
+        val wasPipeline = pipeline != null
+        stopPipeline()
+        if (!wasPipeline) bridge.stopLiveSession()
         finishTurn()
         saveDuration()
         conversationId = null
         state = state.copy(status = LiveStatus.Ended, level = 0f)
     }
 
+    /** Knappen for å snakke trykkes, når samtalen går gjennom OpenRouter. */
+    fun talkStart() {
+        pipeline?.talkStart()
+    }
+
+    /** Knappen slippes, eller trykkes én gang til. */
+    fun talkStop() {
+        pipeline?.talkStop()
+    }
+
+    private fun stopPipeline() {
+        pipeline?.stop()
+        pipeline = null
+    }
+
     fun toggleMute() {
+        if (pipeline != null) return
         val muted = !state.muted
         bridge.setLiveMuted(muted)
         state = state.copy(muted = muted, status = if (muted) LiveStatus.Muted else LiveStatus.Listening)
@@ -117,6 +142,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
         val newStatus = when (status) {
             "connecting" -> LiveStatus.Connecting
             "listening" -> if (state.muted) LiveStatus.Muted else LiveStatus.Listening
+            "recording" -> LiveStatus.Recording
             "thinking" -> LiveStatus.Thinking
             "speaking" -> LiveStatus.Speaking
             "reconnecting" -> LiveStatus.Reconnecting
@@ -145,6 +171,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
     override fun onTurnComplete() {
         finishTurn()
         // Hver 4. tur starter Kompis en ny økt med samtalen som tekst, så lyden ikke faktureres på nytt.
+        if (pipeline != null) return
         turnsSinceRoll++
         if (turnsSinceRoll >= TurnsPerSession && isActive) {
             turnsSinceRoll = 0
@@ -162,7 +189,16 @@ class KompisLive private constructor(private val store: KompisStore, private val
         state = state.copy(debug = text)
     }
 
+    override fun onNotice(message: String) {
+        state = state.copy(message = message)
+    }
+
+    override fun onTimings(timings: TurnTimings) {
+        state = state.copy(timings = timings)
+    }
+
     override fun onError(message: String) {
+        stopPipeline()
         finishTurn()
         saveDuration()
         conversationId = null

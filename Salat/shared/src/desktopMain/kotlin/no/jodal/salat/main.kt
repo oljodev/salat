@@ -91,6 +91,29 @@ private object PreviewBridge : NativeBridge {
         sttListener = null
     }
 
+    override fun kompisConversationOpen(listener: SttListener) = kompisSttOpen(listener)
+
+    override fun kompisConversationClose() = kompisSttClose()
+
+    // Later som setningene spilles av med en gang.
+    private var speechListener: SpeechListener? = null
+
+    override fun speechStart(sampleRate: Int, listener: SpeechListener) {
+        speechListener = listener
+    }
+
+    override fun speechEnqueue(id: String, apiKey: String, bodyJson: String) {
+        speechListener?.onFirstAudio(id, 200)
+        speechListener?.onItemStarted(id)
+        speechListener?.onItemFinished(id)
+    }
+
+    override fun speechFinish() {
+        speechListener?.onFinished()
+    }
+
+    override fun speechStop() = Unit
+
     override fun openRouterWarmUp() = Unit
 
     // Later som svaret strømmer inn ord for ord.

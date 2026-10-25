@@ -40,6 +40,12 @@ const val DefaultLlmModel = "deepseek/deepseek-v4-flash-0731"
 /** Leverandørene for [DefaultLlmModel], i rekkefølge. De er raske og har samme pris. */
 val DefaultLlmProviders = listOf("wafer", "baseten")
 
+/** Modellene fra forrige gang de ble hentet, så testene og samtalene ikke må vente på listen. */
+internal object ModelCache {
+    var llm = emptyList<OpenRouterModel>()
+    var tts = emptyList<OpenRouterModel>()
+}
+
 object OpenRouter {
     /** Modellene som gjør tale til tekst, filtrert etter innstillingene til nøkkelen hos OpenRouter. */
     const val SttModelsPath = "models/user?output_modalities=transcription"
@@ -71,11 +77,18 @@ object OpenRouter {
             }
             .sortedByDescending { it.createdAtSeconds }
 
+    /** Teksten i svaret fra `audio/transcriptions`, eller `null` hvis svaret ikke kan leses. */
+    fun parseTranscript(body: String): String? =
+        runCatching { json.decodeFromString(Transcript.serializer(), body).text.trim() }.getOrNull()
+
     /** Leverandørene i svaret fra `/models/{id}/endpoints`, én gang hver, i rekkefølgen OpenRouter gir dem. */
     fun parseProviders(body: String): List<OpenRouterProvider> =
         json.decodeFromString(EndpointsResponse.serializer(), body).data.endpoints
             .map { OpenRouterProvider(slug = (it.tag ?: it.provider_name).substringBefore('/').lowercase(), name = it.provider_name) }
             .distinctBy { it.slug }
+
+    @Serializable
+    private data class Transcript(val text: String = "")
 
     @Serializable
     private data class ModelList(val data: List<ModelInfo>)

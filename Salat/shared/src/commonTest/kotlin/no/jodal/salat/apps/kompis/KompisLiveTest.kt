@@ -20,6 +20,9 @@ class KompisLiveTest {
     fun setUp() {
         bridge.startedWith = null
         bridge.rolledWith = null
+        bridge.openRouterResult = null
+        ModelCache.llm = emptyList()
+        ModelCache.tts = emptyList()
         store = KompisStore.get(bridge)
         store.saveApiKey("test-key")
         store.update { KompisData() }
@@ -148,15 +151,85 @@ class KompisLiveTest {
     }
 
     @Test
-    fun theOpenRouterEngineDoesNotStartGeminiOrSaveAConversationYet() {
+    fun theOpenRouterEngineOpensTheMicrophoneInsteadOfGemini() {
+        useOpenRouter()
+        live.start(continuing = null)
+        assertTrue(live.isActive)
+        assertNull(bridge.startedWith, "Gemini skal ikke startes")
+        assertTrue(live.state.pushToTalk)
+        assertEquals(LiveStatus.Connecting, live.state.status)
+        assertEquals("mic opened", bridge.pipelineCalls.first())
+        assertEquals(emptyList(), store.data.conversations, "en tom samtale skal ikke lagres")
+
+        bridge.sttListener!!.onMicrophone("AirPods Pro")
+        assertEquals(LiveStatus.Listening, live.state.status)
+        assertEquals("AirPods Pro", live.state.audioRoute)
+
+        live.toggleMute()
+        assertFalse(live.state.muted, "det er ingen mikrofon å dempe med push-to-talk")
+
+        live.end()
+        assertFalse(live.isActive)
+        assertTrue("mic closed" in bridge.pipelineCalls)
+    }
+
+    @Test
+    fun aTurnThroughOpenRouterIsSavedAsAConversation() {
+        useOpenRouter()
+        live.start(continuing = null)
+        bridge.sttListener!!.onMicrophone("iPhone-mikrofon")
+
+        live.talkStart()
+        assertEquals(LiveStatus.Recording, live.state.status)
+        live.talkStop()
+        assertEquals(LiveStatus.Thinking, live.state.status)
+        bridge.sttListener!!.onTranscribed("""{"text":"Hva er en hare?"}""", 2.0, 64_000, 210)
+        assertEquals("Hva er en hare?", live.state.userDraft)
+
+        bridge.chatListener!!.onEvent("""{"choices":[{"delta":{"content":"Et dyr. Og rask."}}]}""", 300)
+        bridge.chatListener!!.onDone(500)
+        bridge.speechListener!!.onItemStarted("s0")
+        assertEquals(LiveStatus.Speaking, live.state.status)
+        assertEquals("Et dyr.", live.state.kompisDraft)
+        bridge.speechListener!!.onItemStarted("s1")
+        bridge.speechListener!!.onFinished()
+
+        assertEquals(LiveStatus.Listening, live.state.status)
+        assertNotNull(live.state.timings)
+        val conversation = store.data.conversations.single()
+        assertEquals("Hva er en hare", conversation.title)
+        assertEquals(listOf(Role.User to "Hva er en hare?", Role.Kompis to "Et dyr. Og rask."), conversation.messages.map { it.role to it.text })
+        assertNull(bridge.rolledWith, "tekstminnet gjelder bare Gemini")
+        live.end()
+    }
+
+    @Test
+    fun aMissingMicrophoneEndsTheConversation() {
+        useOpenRouter()
+        live.start(continuing = null)
+        bridge.sttListener!!.onMicrophoneError("Kompis har ikke tilgang til mikrofonen.")
+        assertFalse(live.isActive)
+        assertEquals(LiveStatus.Failed, live.state.status)
+    }
+
+    @Test
+    fun geminiWorksAgainAfterAConversationThroughOpenRouter() {
+        useOpenRouter()
+        live.start(continuing = null)
+        live.end()
+        store.update { it.copy(settings = it.settings.copy(engine = KompisEngine.GeminiLive.id)) }
+        bridge.startedWith = null
+        live.start(continuing = null)
+        assertNotNull(bridge.startedWith)
+        assertFalse(live.state.pushToTalk)
+        live.toggleMute()
+        assertTrue(live.state.muted)
+    }
+
+    private fun useOpenRouter() {
         store.saveOpenRouterKey("or-key")
         store.update { it.copy(settings = it.settings.copy(engine = KompisEngine.OpenRouter.id)) }
-
-        live.start(continuing = null)
-        assertEquals(LiveStatus.Failed, live.state.status)
-        assertFalse(live.isActive)
-        assertNull(bridge.startedWith)
-        assertEquals(emptyList(), store.data.conversations)
+        bridge.pipelineCalls.clear()
     }
 
     @Test

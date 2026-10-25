@@ -44,7 +44,7 @@ val TtsSampleRates = listOf(0, 16_000, 22_050, 24_000, 44_100, 48_000)
 
 /** Testen av tekst til tale: velg modell og stemme, les opp en tekst, og se hvor raskt lyden kommer. */
 class TtsTest(private val store: KompisStore, private val bridge: NativeBridge) : TtsListener {
-    var models by mutableStateOf(cachedModels)
+    var models by mutableStateOf(ModelCache.tts)
         private set
 
     var isLoadingModels by mutableStateOf(false)
@@ -109,7 +109,7 @@ class TtsTest(private val store: KompisStore, private val bridge: NativeBridge) 
                 modelsError = error ?: "Forsto ikke modellisten fra OpenRouter."
             } else {
                 models = parsed
-                cachedModels = parsed
+                ModelCache.tts = parsed
             }
         }
     }
@@ -202,10 +202,6 @@ class TtsTest(private val store: KompisStore, private val bridge: NativeBridge) 
         results = results.map { if (it.id == id) transform(it) else it }
     }
 
-    private companion object {
-        /** Modellene fra forrige gang, så listen er der med en gang. */
-        var cachedModels = emptyList<OpenRouterModel>()
-    }
 }
 
 /** Om stemmen er norsk, ut fra navnet, f.eks. `nb-NO-Grant:MAI-Voice-2.1`. */
