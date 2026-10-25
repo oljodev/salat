@@ -81,6 +81,30 @@ object OpenRouter {
     fun parseTranscript(body: String): String? =
         runCatching { json.decodeFromString(Transcript.serializer(), body).text.trim() }.getOrNull()
 
+    /** Språket modellen sier den hørte i svaret fra `audio/transcriptions`, hvis det står der. */
+    fun parseDetectedLanguage(body: String): String? =
+        runCatching { json.decodeFromString(Transcript.serializer(), body).language }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** Språket som en tokode, f.eks. «no» for både «no», «nb» og «Norwegian». Andre språk gis som små bokstaver. */
+    fun normalizeLanguage(raw: String): String = when (val name = raw.trim().lowercase()) {
+        "no", "nb", "nn", "nob", "nno", "norwegian", "norsk", "bokmål", "norwegian bokmål", "norwegian nynorsk" -> "no"
+        "en", "eng", "english", "engelsk" -> "en"
+        "es", "spa", "spanish", "español", "espanol", "spansk" -> "es"
+        else -> name
+    }
+
+    /** Språket på norsk, f.eks. «norsk» for «no». Ukjente språk gis som de er. */
+    fun languageName(raw: String): String = when (val code = normalizeLanguage(raw)) {
+        "no" -> "norsk"
+        "en" -> "engelsk"
+        "es" -> "spansk"
+        "sv" -> "svensk"
+        "da" -> "dansk"
+        "de" -> "tysk"
+        "fr" -> "fransk"
+        else -> code
+    }
+
     /** Leverandørene i svaret fra `/models/{id}/endpoints`, én gang hver, i rekkefølgen OpenRouter gir dem. */
     fun parseProviders(body: String): List<OpenRouterProvider> =
         json.decodeFromString(EndpointsResponse.serializer(), body).data.endpoints
@@ -88,7 +112,7 @@ object OpenRouter {
             .distinctBy { it.slug }
 
     @Serializable
-    private data class Transcript(val text: String = "")
+    private data class Transcript(val text: String = "", val language: String? = null)
 
     @Serializable
     private data class ModelList(val data: List<ModelInfo>)

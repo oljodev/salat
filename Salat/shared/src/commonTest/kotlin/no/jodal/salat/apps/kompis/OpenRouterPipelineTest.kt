@@ -48,6 +48,7 @@ class OpenRouterPipelineTest {
         bridge.speechBodies.clear()
         bridge.chatSentWith = null
         bridge.sttStopConfig = null
+        bridge.sttResendConfig = null
         bridge.chatCancelled = false
         bridge.openRouterResult = null
         store = KompisStore.get(bridge)
@@ -301,6 +302,47 @@ class OpenRouterPipelineTest {
         stt.onMicrophoneError("Kompis har ikke tilgang til mikrofonen.")
         assertEquals("error Kompis har ikke tilgang til mikrofonen.", host.events.last())
         assertTrue("mic closed" in bridge.pipelineCalls)
+    }
+
+    @Test
+    fun limitedAutoLanguageIsSentAgainAsNorwegianBeforeTheAnswer() {
+        store.update { it.copy(settings = it.settings.copy(sttLanguage = SttLanguage.Limited.id)) }
+        openAndGoToListening()
+        pipeline.talkStart()
+        clockMillis += 1_000
+        pipeline.talkStop()
+        assertEquals(
+            SttConfig("or-key", "mistralai/voxtral-mini-transcribe-3-0", null, verbose = true),
+            Json.decodeFromString(SttConfig.serializer(), bridge.sttStopConfig!!),
+        )
+
+        // Svensk betyr nesten alltid feilhørt norsk, så språkmodellen får ikke se «tusen tack».
+        clockMillis += 500
+        stt.onTranscribed("""{"text":"Tusen tack","language":"sv"}""", 2.0, 64_000, 480)
+        assertNull(bridge.chatSentWith)
+        assertEquals("resend", bridge.pipelineCalls.last())
+        assertEquals("no", Json.decodeFromString(SttConfig.serializer(), bridge.sttResendConfig!!).language)
+        assertTrue(host.events.none { it.startsWith("user") })
+
+        clockMillis += 300
+        stt.onTranscribed("""{"text":"Tusen takk","language":"no"}""", 2.0, 64_000, 280)
+        assertTrue("user Tusen takk" in host.events)
+        val messages = lastRequest()["messages"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("Tusen takk", messages.last()["content"]!!.jsonPrimitive.content)
+
+        chunk("Bare hyggelig! ")
+        speech.onItemStarted("s0")
+        assertEquals(800L, host.timings!!.sttMillis, "begge sendingene regnes med")
+    }
+
+    @Test
+    fun aChosenLanguageIsSentOnlyOnce() {
+        openAndGoToListening()
+        pipeline.talkStart()
+        pipeline.talkStop()
+        stt.onTranscribed("""{"text":"Hej","language":"sv"}""", 2.0, 64_000, 480)
+        assertNull(bridge.sttResendConfig)
+        assertTrue("user Hej" in host.events)
     }
 
     @Test

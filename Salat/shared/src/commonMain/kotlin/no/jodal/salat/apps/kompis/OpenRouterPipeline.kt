@@ -64,6 +64,8 @@ class OpenRouterPipeline(
     // Målinger.
     private var releasedAt = 0L
     private var sttMillis = 0L
+    private var sttLanguage = SttLanguage.Norwegian
+    private var sttRetried = false
     private var chatSentAt = 0L
     private var sentenceMillis: Long? = null
     private var voiceMillis: Long? = null
@@ -114,9 +116,10 @@ class OpenRouterPipeline(
         phase = Phase.Transcribing
         releasedAt = clock()
         host.onStatus("thinking")
-        val language = settings.sttLanguage.ifEmpty { null }
+        sttLanguage = SttLanguage.byId(settings.sttLanguage)
+        sttRetried = false
         bridge.kompisSttStopRecording(
-            json.encodeToString(SttConfig.serializer(), SttConfig(store.openRouterKey, settings.sttModel, language)),
+            json.encodeToString(SttConfig.serializer(), sttLanguage.config(store.openRouterKey, settings.sttModel)),
         )
     }
 
@@ -145,7 +148,15 @@ class OpenRouterPipeline(
 
         override fun onTranscribed(responseJson: String, audioSeconds: Double, uploadBytes: Int, millis: Long) {
             if (phase != Phase.Transcribing) return
-            sttMillis = millis
+            if (!sttRetried) {
+                // Hørte modellen et språk man ikke snakker, er det feilhørt norsk. Prøv igjen som norsk.
+                SttLanguageCheck.retryWith(sttLanguage, responseJson)?.let { code ->
+                    sttRetried = true
+                    bridge.kompisSttResend(json.encodeToString(SttConfig.serializer(), SttConfig(store.openRouterKey, settings.sttModel, code)))
+                    return
+                }
+            }
+            sttMillis = if (sttRetried) clock() - releasedAt else millis
             val text = OpenRouter.parseTranscript(responseJson)
             when {
                 text == null -> backToListening("Forsto ikke svaret fra OpenRouter.")

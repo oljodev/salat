@@ -11,6 +11,8 @@ final class SttRecorder {
         let apiKey: String
         let model: String
         let language: String?
+        /// Be om svar med språket modellen hørte.
+        var verbose: Bool?
     }
 
     private var listener: SttListener?
@@ -42,6 +44,9 @@ final class SttRecorder {
 
     // Diagnose, så feilmeldingene kan si hva som faktisk skjedde.
     private var recordingStartedAt: Date?
+    /// Det siste opptaket, så det kan sendes på nytt på et annet språk.
+    private var lastPcm = Data()
+    private var lastSeconds = 0.0
     /// Om ekkodempingen er på. Den slås av hvis mikrofonen ikke virker med den.
     private var voiceProcessing = true
     private var startError: String?
@@ -125,13 +130,32 @@ final class SttRecorder {
             listener?.onError(message: Self.tooShortMessage(seconds: seconds, heldSeconds: heldSeconds, micBuffers: buffers, startError: startError))
             return
         }
+        lastPcm = pcm
+        lastSeconds = seconds
+        transcribe(pcm, seconds: seconds, config: config, since: stoppedAt, mayDropVerbose: true)
+    }
 
+    /// Sender det siste opptaket på nytt, f.eks. på et annet språk. Tiden regnes fra nå.
+    func resend(configJson: String) {
+        guard let config = try? JSONDecoder().decode(Config.self, from: Data(configJson.utf8)), !lastPcm.isEmpty else {
+            listener?.onError(message: "Fant ikke opptaket som skulle sendes på nytt.")
+            return
+        }
+        transcribe(lastPcm, seconds: lastSeconds, config: config, since: Date(), mayDropVerbose: true)
+    }
+
+    /// Sender opptaket til OpenRouter. Tiden regnes fra [since].
+    private func transcribe(_ pcm: Data, seconds: Double, config: Config, since: Date, mayDropVerbose: Bool) {
         var body: [String: Any] = [
             "model": config.model,
             "input_audio": ["data": Self.wav(pcm: pcm, sampleRate: 16_000).base64EncodedString(), "format": "wav"],
         ]
         if let language = config.language {
             body["language"] = language
+        }
+        // Med verbose_json sier modellen hvilket språk den hørte, så det kan sjekkes.
+        if config.verbose == true {
+            body["response_format"] = "verbose_json"
         }
         var request = URLRequest(url: URL(string: "audio/transcriptions", relativeTo: OpenRouter.baseUrl)!)
         request.httpMethod = "POST"
@@ -144,7 +168,7 @@ final class SttRecorder {
         // Svaret skal fram selv om testskjermen lukkes i mellomtiden.
         let listener = self.listener
         URLSession.shared.dataTask(with: request) { data, response, error in
-            let millis = Int64(Date().timeIntervalSince(stoppedAt) * 1000)
+            let millis = Int64(Date().timeIntervalSince(since) * 1000)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             DispatchQueue.main.async {
                 if let error {
@@ -156,6 +180,11 @@ final class SttRecorder {
                         uploadBytes: Int32(uploadBytes),
                         millis: millis
                     )
+                } else if status == 400, config.verbose == true, mayDropVerbose {
+                    // Modellen støtter kanskje ikke verbose_json. Prøv uten, og godta språket den fant.
+                    var plain = config
+                    plain.verbose = false
+                    self.transcribe(pcm, seconds: seconds, config: plain, since: since, mayDropVerbose: false)
                 } else {
                     listener?.onError(message: OpenRouter.errorMessage(status: status, data: data))
                 }

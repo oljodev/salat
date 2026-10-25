@@ -91,6 +91,10 @@ private object PreviewBridge : NativeBridge {
         sttListener = null
     }
 
+    override fun kompisSttResend(configJson: String) {
+        sttListener?.onTranscribed("""{"text":"Hei, dette er en test av tale til tekst."}""", 2.4, 76_844, 640)
+    }
+
     override fun kompisConversationOpen(listener: SttListener) = kompisSttOpen(listener)
 
     override fun kompisConversationClose() = kompisSttClose()

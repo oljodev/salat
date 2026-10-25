@@ -3,21 +3,27 @@ package no.jodal.salat.apps.kompis
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.time.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import no.jodal.salat.NativeBridge
 import no.jodal.salat.SttListener
 
-/** Språket modellen får beskjed om. [code] = `null` lar modellen finne ut av det selv. */
-enum class SttLanguage(val code: String?, val label: String) {
-    Auto(null, "Auto"),
-    Norwegian("no", "Norsk"),
-    English("en", "Engelsk"),
-    Spanish("es", "Spansk"),
+/**
+ * Språket modellen får beskjed om. [id] er det som lagres. [code] = `null` lar modellen finne ut av det
+ * selv. [allowed] er språkene man kan snakke, når modellen finner språket selv: hører den et annet språk,
+ * er det nesten alltid norsk som ble feilhørt, så opptaket kjøres på nytt som det første språket.
+ */
+enum class SttLanguage(val id: String, val code: String?, val label: String, val allowed: List<String>? = null) {
+    Auto("", null, "Auto"),
+    Limited("auto:no,en,es", null, "Auto: norsk, engelsk, spansk", allowed = listOf("no", "en", "es")),
+    Norwegian("no", "no", "Norsk"),
+    English("en", "en", "Engelsk"),
+    Spanish("es", "es", "Spansk"),
     ;
 
     companion object {
-        fun byCode(code: String): SttLanguage = entries.firstOrNull { it.code == code.ifEmpty { null } } ?: Norwegian
+        fun byId(id: String): SttLanguage = entries.firstOrNull { it.id == id } ?: Norwegian
     }
 }
 
@@ -28,7 +34,22 @@ data class SttConfig(
     val model: String,
     /** ISO 639-1, eller `null` for å la modellen finne språket. */
     val language: String?,
+    /** Be om svar med språket modellen hørte, så det kan sjekkes. */
+    val verbose: Boolean = false,
 )
+
+/** Innstillingene for et opptak på [language]. */
+internal fun SttLanguage.config(apiKey: String, model: String) = SttConfig(apiKey, model, code, verbose = allowed != null)
+
+/** Sjekker om språket modellen hørte, er et av de man kan snakke. */
+internal object SttLanguageCheck {
+    /** Språket (tokode) opptaket skal sendes på nytt med, eller `null` hvis svaret kan brukes som det er. */
+    fun retryWith(language: SttLanguage, responseJson: String): String? {
+        val allowed = language.allowed ?: return null
+        val detected = OpenRouter.parseDetectedLanguage(responseJson) ?: return null
+        return if (OpenRouter.normalizeLanguage(detected) in allowed) null else allowed.first()
+    }
+}
 
 /** Ett forsøk: hva modellen hørte, og hvor lang tid det tok. */
 data class SttResult(
@@ -41,13 +62,19 @@ data class SttResult(
     val millis: Long,
     /** Hva forsøket kostet i dollar, hvis OpenRouter sa det. */
     val costUsd: Double?,
+    /** Hva som skjedde med språket, f.eks. «Oppdaget svensk, prøvde igjen som norsk». */
+    val note: String? = null,
 )
 
 /**
  * Testen av tale til tekst: hold inne, snakk, slipp, og se teksten og hvor lang tid det tok. Et kort
  * trykk starter opptaket i stedet, og et trykk til sender det.
  */
-class SttTest(private val store: KompisStore, private val bridge: NativeBridge) : SttListener {
+class SttTest(
+    private val store: KompisStore,
+    private val bridge: NativeBridge,
+    private val clock: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+) : SttListener {
     var level by mutableStateOf(0f)
         private set
 
@@ -88,13 +115,18 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
         private set
 
     val modelId: String get() = store.data.settings.sttModel
-    val language: SttLanguage get() = SttLanguage.byCode(store.data.settings.sttLanguage)
+    val language: SttLanguage get() = SttLanguage.byId(store.data.settings.sttLanguage)
 
     /** Navnet på modellen, f.eks. «Voxtral Mini Transcribe 3», eller id-en før listen er hentet. */
     fun modelName(id: String): String = models.firstOrNull { it.id == id }?.shortName ?: id.substringAfter('/')
 
     /** Modellen og språket for opptaket som er sendt. */
     private var pending: Pair<String, SttLanguage>? = null
+
+    // Når språket skal velges blant noen få, og modellen hørte et annet: opptaket sendes på nytt.
+    private var releasedAt = 0L
+    private var detected: String? = null
+    private var retriedAs: String? = null
 
     fun open() = bridge.kompisSttOpen(this)
 
@@ -125,7 +157,7 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
     fun selectModel(id: String) = store.update { it.copy(settings = it.settings.copy(sttModel = id)) }
 
     fun selectLanguage(language: SttLanguage) =
-        store.update { it.copy(settings = it.settings.copy(sttLanguage = language.code.orEmpty())) }
+        store.update { it.copy(settings = it.settings.copy(sttLanguage = language.id)) }
 
     fun startRecording() {
         if (isRecording || isWaiting) return
@@ -150,7 +182,10 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
         isTapMode = false
         isWaiting = true
         pending = modelId to language
-        val config = SttConfig(apiKey = store.openRouterKey, model = modelId, language = language.code)
+        releasedAt = clock()
+        detected = null
+        retriedAs = null
+        val config = language.config(store.openRouterKey, modelId)
         bridge.kompisSttStopRecording(json.encodeToString(SttConfig.serializer(), config))
     }
 
@@ -177,6 +212,14 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
 
     override fun onTranscribed(responseJson: String, audioSeconds: Double, uploadBytes: Int, millis: Long) {
         val (sentModel, sentLanguage) = pending ?: (modelId to language)
+        if (retriedAs == null) {
+            SttLanguageCheck.retryWith(sentLanguage, responseJson)?.let { code ->
+                detected = OpenRouter.parseDetectedLanguage(responseJson)
+                retriedAs = code
+                bridge.kompisSttResend(json.encodeToString(SttConfig.serializer(), SttConfig(store.openRouterKey, sentModel, code)))
+                return
+            }
+        }
         pending = null
         isWaiting = false
         val response = runCatching { json.decodeFromString(SttResponse.serializer(), responseJson) }.getOrNull()
@@ -192,8 +235,9 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
                 language = sentLanguage,
                 audioSeconds = audioSeconds,
                 uploadBytes = uploadBytes,
-                millis = millis,
+                millis = if (retriedAs != null) clock() - releasedAt else millis,
                 costUsd = response.usage?.cost,
+                note = languageNote(sentLanguage, OpenRouter.parseDetectedLanguage(responseJson)),
             ),
         ) + results
     }
@@ -204,6 +248,17 @@ class SttTest(private val store: KompisStore, private val bridge: NativeBridge) 
         isTapMode = false
         isWaiting = false
         this.message = message
+    }
+
+    /** Forklarer språkvalget når modellen fant språket selv. */
+    private fun languageNote(language: SttLanguage, heard: String?): String? {
+        val retry = retriedAs
+        return when {
+            language.allowed == null -> null
+            retry != null -> "Oppdaget ${detected?.let(OpenRouter::languageName) ?: "et annet språk"}, prøvde igjen som ${OpenRouter.languageName(retry)}"
+            heard != null -> "Oppdaget ${OpenRouter.languageName(heard)}"
+            else -> "Modellen sa ikke hvilket språk den hørte"
+        }
     }
 
     @Serializable

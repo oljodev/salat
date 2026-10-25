@@ -181,6 +181,13 @@ class LlmTestTest {
     }
 
     @Test
+    fun theVoicePromptExpectsSwedishLookingWordsToBeMisheardNorwegian() {
+        val prompt = test.prompt()
+        assertTrue("«tusen tack» i stedet for «tusen takk»" in prompt)
+        assertTrue("aldri svare «tusen takk på svensk»" in prompt)
+    }
+
+    @Test
     fun usesThePersonalityFromTheSettings() {
         store.update { it.copy(settings = it.settings.copy(personality = "Du er en pirat.")) }
         val prompt = test.prompt()

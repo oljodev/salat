@@ -16,6 +16,7 @@ internal object FakeBridge : NativeBridge {
     /** Det Kompis har bedt Swift om for en samtale med OpenRouter, f.eks. `speak s0` eller `record`. */
     val pipelineCalls = mutableListOf<String>()
     var sttStopConfig: String? = null
+    var sttResendConfig: String? = null
     val speechBodies = mutableMapOf<String, String>()
     val ttsCalls = mutableListOf<String>()
     var ttsSentWith: String? = null
@@ -63,6 +64,10 @@ internal object FakeBridge : NativeBridge {
     override fun kompisSttClose() = Unit
     override fun kompisConversationClose() {
         pipelineCalls += "mic closed"
+    }
+    override fun kompisSttResend(configJson: String) {
+        sttResendConfig = configJson
+        pipelineCalls += "resend"
     }
     override fun kompisConversationOpen(listener: SttListener) {
         sttListener = listener

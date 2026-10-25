@@ -75,6 +75,12 @@ interface NativeBridge {
     fun kompisSttClose()
 
     /**
+     * Sender det siste opptaket på nytt med andre innstillinger, f.eks. et språk. [configJson] er en
+     * `SttConfig`. Svaret kommer til [SttListener.onTranscribed], med tiden fra nå.
+     */
+    fun kompisSttResend(configJson: String)
+
+    /**
      * Slår på mikrofonen for en samtale med OpenRouter, som [kompisSttOpen], men den kan ikke tas av
      * testen av tale til tekst mens samtalen pågår. Stenges med [kompisConversationClose].
      */

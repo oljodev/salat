@@ -209,6 +209,9 @@ private fun ResultCard(result: SttResult) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        result.note?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = colors.secondary)
+        }
         Text(
             result.text.ifEmpty { "Hørte ingenting." },
             style = MaterialTheme.typography.bodyLarge,

@@ -89,6 +89,10 @@ final class IosNativeBridge: NSObject, NativeBridge {
         SttRecorder.shared.close()
     }
 
+    func kompisSttResend(configJson: String) {
+        SttRecorder.shared.resend(configJson: configJson)
+    }
+
     func kompisConversationOpen(listener: SttListener) {
         EkkoAudio.shared.pauseForOtherAudio()
         SttRecorder.shared.open(listener: listener, conversation: true)
