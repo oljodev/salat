@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
@@ -57,7 +59,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.HorizontalDivider
 import no.jodal.salat.resources.Res
 import no.jodal.salat.resources.kompis_logo
 import org.jetbrains.compose.resources.painterResource
@@ -288,9 +289,8 @@ fun KompisHome(
                     modifier = Modifier.padding(top = 20.dp, bottom = 2.dp),
                 )
             }
-            items.forEachIndexed { index, conversation ->
+            for (conversation in items) {
                 item(key = conversation.id) {
-                    if (index > 0) HorizontalDivider(color = colors.outlineVariant)
                     SwipeToDelete(
                         open = swipedOpen == conversation.id,
                         onOpenChange = { swipedOpen = if (it) conversation.id else null },
@@ -434,7 +434,7 @@ private fun ApiKeyRow(engine: KompisEngine, onClick: () -> Unit) {
     }
 }
 
-/** Dra raden mot venstre for å vise en rød søppelkasse. */
+/** Dra kortet mot venstre for å vise en rød slettknapp like høy som kortet, slik som i Meldinger på iPhone. */
 @Composable
 private fun SwipeToDelete(
     open: Boolean,
@@ -442,29 +442,32 @@ private fun SwipeToDelete(
     onDelete: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val colors = MaterialTheme.colorScheme
-    val reveal = with(LocalDensity.current) { 84.dp.toPx() }
+    val reveal = with(LocalDensity.current) { 88.dp.toPx() }
     val offset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(open) { offset.animateTo(if (open) -reveal else 0f, spring(stiffness = 600f)) }
 
-    Box(Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth().padding(top = 10.dp)) {
         Box(
             contentAlignment = Alignment.CenterEnd,
-            modifier = Modifier.matchParentSize().padding(end = 18.dp).alpha((-offset.value / reveal).coerceIn(0f, 1f)),
+            modifier = Modifier.matchParentSize().alpha((-offset.value / reveal).coerceIn(0f, 1f)),
         ) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(48.dp).clip(CircleShape).background(KompisPalette.EndCall).clickable(onClick = onDelete),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(76.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(KompisPalette.EndCall)
+                    .clickable(onClick = onDelete),
             ) {
-                Icon(Icons.Rounded.DeleteOutline, contentDescription = "Slett samtalen", tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = "Slett samtalen", tint = Color.White, modifier = Modifier.size(26.dp))
             }
         }
         Box(
             Modifier
                 .offset { IntOffset(offset.value.roundToInt(), 0) }
                 .fillMaxWidth()
-                .background(colors.background)
                 .pointerInput(Unit) {
                     fun settle() {
                         val opens = offset.value < -reveal / 2
@@ -489,7 +492,12 @@ private fun ConversationRow(conversation: Conversation, nowMillis: Long, onClick
     val colors = MaterialTheme.colorScheme
     Column(
         verticalArrangement = Arrangement.spacedBy(3.dp),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(colors.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
