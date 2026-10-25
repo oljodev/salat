@@ -1,21 +1,9 @@
 package no.jodal.salat.apps.kompis.ui
 
 import androidx.compose.animation.AnimatedContent
-import no.jodal.salat.apps.kompis.formatTimings
 import no.jodal.salat.apps.kompis.TurnTimings
-import no.jodal.salat.Haptics
-import kotlin.time.TimeSource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,7 +22,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -120,7 +107,7 @@ fun LiveScreen(
     onEnd: () -> Unit,
     onMinimize: () -> Unit,
 ) {
-    val mode = if (state.muted) VoiceMode.Idle else state.status.voice
+    val mode = state.displayMode()
     Box(Modifier.fillMaxSize().background(KompisPalette.Night)) {
         Aurora(
             mode = mode,
@@ -168,11 +155,22 @@ private fun TopBar(state: LiveUiState, showTranscript: Boolean, onMinimize: () -
     }
 }
 
+/** Hvordan det ser ut at samtalen er. Med knapp for å snakke lytter ikke mikrofonen før man holder inne. */
+private fun LiveUiState.displayMode(): VoiceMode = when {
+    muted -> VoiceMode.Idle
+    pushToTalk && status == LiveStatus.Listening -> VoiceMode.Idle
+    else -> status.voice
+}
+
+/** Det som står i statuslinjen. Uten at mikrofonen lytter, er man bare klar. */
+private fun LiveUiState.displayLabel(): String =
+    if (pushToTalk && status == LiveStatus.Listening) "Klar" else status.label
+
 /** «● Lytter · 04:12» */
 @Composable
 private fun StatusLine(state: LiveUiState) {
     val dot by animateColorAsState(
-        when (if (state.muted) VoiceMode.Idle else state.status.voice) {
+        when (state.displayMode()) {
             VoiceMode.Listening -> KompisPalette.Cyan
             VoiceMode.Speaking -> KompisPalette.Pink
             VoiceMode.Thinking -> KompisPalette.Violet
@@ -182,7 +180,7 @@ private fun StatusLine(state: LiveUiState) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(Modifier.size(6.dp).clip(CircleShape).background(dot))
         Text(
-            "${state.status.label}  ·  ${formatTimer(state.elapsedSeconds)}",
+            "${state.displayLabel()}  ·  ${formatTimer(state.elapsedSeconds)}",
             style = MaterialTheme.typography.labelMedium,
             color = Secondary,
         )
@@ -193,14 +191,17 @@ private fun StatusLine(state: LiveUiState) {
 @Composable
 private fun Captions(state: LiveUiState) {
     val userIsTalking = state.userDraft != null && state.status != LiveStatus.Speaking
+    val recordingNow = state.pushToTalk && state.status == LiveStatus.Recording
     val current = when {
         state.message != null -> state.message
+        recordingNow -> "Snakk nå …"
         userIsTalking -> state.userDraft
         else -> state.kompisDraft ?: state.messages.lastOrNull { it.role == Role.Kompis }?.text
     }
     // Det som ble sagt før, så man husker hva man svarer på.
     val previous = when {
         state.message != null -> null
+        recordingNow -> state.messages.lastOrNull { it.role == Role.Kompis }?.text
         userIsTalking -> state.messages.lastOrNull { it.role == Role.Kompis }?.text
         state.kompisDraft != null -> state.messages.lastOrNull { it.role == Role.User }?.text
         else -> null
@@ -284,24 +285,17 @@ private fun Controls(
     onTalkStop: () -> Unit,
     onEnd: () -> Unit,
 ) {
+    if (state.pushToTalk) {
+        PushToTalkControls(state, onTalkStart = onTalkStart, onTalkStop = onTalkStop, onEnd = onEnd)
+        return
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
     ) {
-        state.timings?.takeIf { state.pushToTalk }?.let {
-            Text(
-                formatTimings(it),
-                style = MaterialTheme.typography.labelSmall,
-                color = White.copy(alpha = 0.55f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (state.pushToTalk) {
-                TalkButton(state, onStart = onTalkStart, onStop = onTalkStop)
-            } else Box(
+            Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(64.dp)
@@ -338,82 +332,11 @@ private fun Controls(
                 modifier = Modifier.size(15.dp),
             )
             Text(
-                if (state.pushToTalk) state.audioRoute else "${state.audioRoute}  ·  Du kan låse skjermen",
+                "${state.audioRoute}  ·  Du kan låse skjermen",
                 style = MaterialTheme.typography.labelMedium,
                 color = White.copy(alpha = 0.55f),
             )
         }
-    }
-}
-
-/**
- * Knappen for å snakke. Holdes den inne, sendes opptaket når man slipper. Et kort trykk starter
- * opptaket, og neste trykk sender det. Trykker man mens Kompis snakker, avbrytes Kompis.
- */
-@Composable
-private fun TalkButton(state: LiveUiState, onStart: () -> Unit, onStop: () -> Unit) {
-    val recording = state.status == LiveStatus.Recording
-    val ready = state.status in setOf(LiveStatus.Listening, LiveStatus.Recording, LiveStatus.Thinking, LiveStatus.Speaking)
-    var tapMode by remember { mutableStateOf(false) }
-    LaunchedEffect(recording) { if (!recording) tapMode = false }
-    val isRecording by rememberUpdatedState(recording)
-    val isReady by rememberUpdatedState(ready)
-    val start by rememberUpdatedState(onStart)
-    val stop by rememberUpdatedState(onStop)
-    val scale by animateFloatAsState(if (recording) 1.1f else 1f)
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(88.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
-                .alpha(if (ready) 1f else 0.4f)
-                .clip(CircleShape)
-                .background(if (recording) Brush.linearGradient(KompisPalette.Aurora) else Brush.linearGradient(listOf(White.copy(alpha = 0.16f), White.copy(alpha = 0.16f))))
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            if (isRecording) {
-                                // Det andre trykket i trykk-modus.
-                                Haptics.tap()
-                                stop()
-                                return@detectTapGestures
-                            }
-                            if (!isReady) return@detectTapGestures
-                            Haptics.firm()
-                            start()
-                            val pressedAt = TimeSource.Monotonic.markNow()
-                            val released = tryAwaitRelease()
-                            if (released && pressedAt.elapsedNow() >= HoldThreshold) {
-                                Haptics.tap()
-                                stop()
-                            } else {
-                                tapMode = true
-                            }
-                        },
-                    )
-                },
-        ) {
-            if (recording) {
-                VoiceBars(level = state.level, color = White, barWidth = 4.dp, modifier = Modifier.height(30.dp))
-            } else {
-                Icon(Icons.Rounded.Mic, contentDescription = "Hold inne og snakk", tint = White, modifier = Modifier.size(34.dp))
-            }
-        }
-        Text(
-            when {
-                recording && tapMode -> "Trykk for å sende"
-                recording -> "Slipp for å sende"
-                state.status == LiveStatus.Speaking -> "Hold inne for å avbryte"
-                else -> "Hold inne og snakk"
-            },
-            style = MaterialTheme.typography.labelMedium,
-            color = White.copy(alpha = 0.7f),
-        )
     }
 }
 
