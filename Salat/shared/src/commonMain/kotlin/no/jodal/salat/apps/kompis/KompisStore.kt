@@ -17,6 +17,12 @@ class KompisStore private constructor(private val bridge: NativeBridge) {
 
     val hasApiKey: Boolean get() = apiKey.isNotBlank()
 
+    /** Nøkkelen til OpenRouter, for å teste tale til tekst. */
+    var openRouterKey by mutableStateOf(bridge.loadSecret(OpenRouterKeyName).orEmpty())
+        private set
+
+    val hasOpenRouterKey: Boolean get() = openRouterKey.isNotBlank()
+
     fun update(transform: (KompisData) -> KompisData) {
         data = transform(data)
         bridge.saveText(StorageKey, json.encodeToString(KompisData.serializer(), data))
@@ -25,6 +31,11 @@ class KompisStore private constructor(private val bridge: NativeBridge) {
     fun saveApiKey(key: String) {
         apiKey = key.trim()
         bridge.saveSecret(ApiKeyName, apiKey)
+    }
+
+    fun saveOpenRouterKey(key: String) {
+        openRouterKey = key.trim()
+        bridge.saveSecret(OpenRouterKeyName, openRouterKey)
     }
 
     fun conversation(id: String): Conversation? = data.conversations.firstOrNull { it.id == id }
@@ -44,6 +55,7 @@ class KompisStore private constructor(private val bridge: NativeBridge) {
     companion object {
         private const val StorageKey = "kompis.data"
         private const val ApiKeyName = "kompis.geminiApiKey"
+        private const val OpenRouterKeyName = "kompis.openRouterApiKey"
         private val json = Json { ignoreUnknownKeys = true }
         private var instance: KompisStore? = null
 

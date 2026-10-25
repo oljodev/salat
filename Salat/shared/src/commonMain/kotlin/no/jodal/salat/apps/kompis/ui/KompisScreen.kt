@@ -83,6 +83,7 @@ private sealed interface KompisDestination {
     data object Home : KompisDestination
     data class Chat(val id: String) : KompisDestination
     data class Live(val conversationId: String?) : KompisDestination
+    data object SttTest : KompisDestination
 }
 
 @Composable
@@ -111,7 +112,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                         slideInVertically(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     initialState is KompisDestination.Live ->
                         fadeIn(tween(duration)) togetherWith slideOutVertically(tween(duration)) { it }
-                    targetState is KompisDestination.Chat ->
+                    targetState is KompisDestination.Chat || targetState is KompisDestination.SttTest ->
                         slideInHorizontally(tween(duration)) { it } togetherWith fadeOut(tween(duration))
                     else -> fadeIn(tween(duration)) togetherWith slideOutHorizontally(tween(duration)) { it }
                 }
@@ -128,6 +129,13 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                     },
                     onReturnToLive = { destination = KompisDestination.Live(live.conversationId) },
                     onOpen = { destination = KompisDestination.Chat(it.id) },
+                    onSettings = { showSettings = true },
+                    onSttTest = { destination = KompisDestination.SttTest },
+                )
+                KompisDestination.SttTest -> SttTestScreen(
+                    store = store,
+                    bridge = bridge,
+                    onBack = { destination = KompisDestination.Home },
                     onSettings = { showSettings = true },
                 )
                 is KompisDestination.Chat -> {
@@ -196,6 +204,7 @@ fun KompisHome(
     onReturnToLive: () -> Unit,
     onOpen: (Conversation) -> Unit,
     onSettings: () -> Unit,
+    onSttTest: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val now = store.nowMillis()
@@ -227,6 +236,7 @@ fun KompisHome(
         if (!store.hasApiKey) {
             item(key = "key") { ApiKeyRow(onClick = onSettings) }
         }
+        item(key = "stt") { SttTestRow(onClick = onSttTest) }
 
         item(key = "heading") {
             Text(
@@ -381,6 +391,34 @@ private fun ApiKeyRow(onClick: () -> Unit) {
             Text("Legg inn Gemini-nøkkel", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
             Text(
                 "Kompis trenger en nøkkel fra Google AI Studio for å snakke.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+            )
+        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant)
+    }
+}
+
+/** Fører til testen av tale til tekst, det første steget mot Kompis med OpenRouter. */
+@Composable
+private fun SttTestRow(onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier
+            .padding(top = 16.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .border(1.dp, colors.outlineVariant, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Icon(Icons.Rounded.Mic, contentDescription = null, tint = colors.onSurface)
+        Column(Modifier.weight(1f)) {
+            Text("Test tale til tekst", style = MaterialTheme.typography.titleMedium, color = colors.onSurface)
+            Text(
+                "Prøv modeller fra OpenRouter, og se hvor raskt teksten kommer.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
             )

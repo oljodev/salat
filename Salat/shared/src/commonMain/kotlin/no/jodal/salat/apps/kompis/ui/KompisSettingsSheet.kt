@@ -76,7 +76,7 @@ fun KompisSettingsSheet(store: KompisStore, onDismiss: () -> Unit) {
 fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Unit) {
     val colors = MaterialTheme.colorScheme
     var apiKey by remember { mutableStateOf(store.apiKey) }
-    var showKey by remember { mutableStateOf(false) }
+    var openRouterKey by remember { mutableStateOf(store.openRouterKey) }
     var voice by remember { mutableStateOf(store.data.settings.voice) }
     var personality by remember { mutableStateOf(store.data.settings.personality) }
     val uriHandler = LocalUriHandler.current
@@ -88,6 +88,7 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
             TextButton(onClick = {
                 onClose {
                     store.saveApiKey(apiKey)
+                    store.saveOpenRouterKey(openRouterKey)
                     store.update { it.copy(settings = it.settings.copy(voice = voice, personality = personality.trim().ifEmpty { DefaultPersonality })) }
                 }
             }) {
@@ -100,36 +101,7 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             SettingsSection("Gemini-nøkkel") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BasicTextField(
-                        value = apiKey,
-                        onValueChange = { apiKey = it },
-                        singleLine = true,
-                        visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface, fontFamily = FontFamily.Monospace),
-                        cursorBrush = SolidColor(colors.primary),
-                        modifier = Modifier.weight(1f),
-                        decorationBox = { inner ->
-                            Box {
-                                if (apiKey.isEmpty()) {
-                                    Text("Lim inn nøkkelen her", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
-                                }
-                                inner()
-                            }
-                        },
-                    )
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.size(32.dp).clip(CircleShape).clickable { showKey = !showKey },
-                    ) {
-                        Icon(
-                            if (showKey) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                            contentDescription = if (showKey) "Skjul nøkkelen" else "Vis nøkkelen",
-                            tint = colors.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
+                KeyField(apiKey, onValueChange = { apiKey = it })
                 SectionDivider()
                 Text(
                     "Nøkkelen lagres bare i nøkkelringen på telefonen.",
@@ -141,6 +113,22 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
                     style = MaterialTheme.typography.labelLarge,
                     color = colors.primary,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { uriHandler.openUri("https://aistudio.google.com/apikey") },
+                )
+            }
+
+            SettingsSection("OpenRouter-nøkkel") {
+                KeyField(openRouterKey, onValueChange = { openRouterKey = it })
+                SectionDivider()
+                Text(
+                    "Brukes til å teste tale til tekst. Lagres bare i nøkkelringen på telefonen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                )
+                Text(
+                    "Lag en nøkkel hos OpenRouter",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.primary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { uriHandler.openUri("https://openrouter.ai/settings/keys") },
                 )
             }
 
@@ -204,6 +192,43 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
                 modifier = Modifier.fillMaxWidth(),
             )
             Box(Modifier.height(32.dp))
+        }
+    }
+}
+
+/** Et felt for en API-nøkkel, skjult til man trykker på øyet. */
+@Composable
+private fun KeyField(value: String, onValueChange: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var showKey by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface, fontFamily = FontFamily.Monospace),
+            cursorBrush = SolidColor(colors.primary),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) {
+                        Text("Lim inn nøkkelen her", style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                    }
+                    inner()
+                }
+            },
+        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(32.dp).clip(CircleShape).clickable { showKey = !showKey },
+        ) {
+            Icon(
+                if (showKey) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                contentDescription = if (showKey) "Skjul nøkkelen" else "Vis nøkkelen",
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }

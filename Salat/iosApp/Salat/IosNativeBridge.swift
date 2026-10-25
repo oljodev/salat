@@ -72,6 +72,23 @@ final class IosNativeBridge: NSObject, NativeBridge {
         LiveSession.shared.roll(historyJson: historyJson)
     }
 
+    func kompisSttOpen(listener: SttListener) {
+        EkkoAudio.shared.pauseForOtherAudio()
+        SttRecorder.shared.open(listener: listener)
+    }
+
+    func kompisSttStartRecording() {
+        SttRecorder.shared.startRecording()
+    }
+
+    func kompisSttStopRecording(configJson: String) {
+        SttRecorder.shared.stopRecording(configJson: configJson)
+    }
+
+    func kompisSttClose() {
+        SttRecorder.shared.close()
+    }
+
     func ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) {
         EkkoImport.shared.youTube(clipId: clipId, videoId: videoId, listener: listener)
     }

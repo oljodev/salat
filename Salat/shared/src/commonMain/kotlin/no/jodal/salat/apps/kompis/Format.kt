@@ -33,6 +33,23 @@ fun formatDuration(seconds: Int): String = when {
 fun formatTimer(seconds: Int): String =
     "${(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}"
 
+/** F.eks. «2,4 s». */
+fun formatSeconds(seconds: Double): String = "${decimal(seconds, 1)} s"
+
+/** F.eks. «77 kB». */
+fun formatKilobytes(bytes: Int): String = "${(bytes + 500) / 1000} kB"
+
+/** F.eks. «$0,00014». Lyd koster lite per forsøk, så det trengs mange desimaler. */
+fun formatUsd(dollars: Double): String = "$${decimal(dollars, 5)}"
+
+/** [value] med [decimals] desimaler og komma, som på norsk. */
+private fun decimal(value: Double, decimals: Int): String {
+    var factor = 1L
+    repeat(decimals) { factor *= 10 }
+    val rounded = kotlin.math.round(value * factor).toLong()
+    return "${rounded / factor},${(rounded % factor).toString().padStart(decimals, '0')}"
+}
+
 enum class Period(val label: String) { Today("I dag"), ThisWeek("Denne uken"), Earlier("Tidligere") }
 
 fun periodOf(millis: Long, nowMillis: Long): Period {

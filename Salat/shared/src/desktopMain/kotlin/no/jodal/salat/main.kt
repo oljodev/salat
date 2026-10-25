@@ -66,6 +66,30 @@ private object PreviewBridge : NativeBridge {
 
     override fun rollLiveSession(historyJson: String) = Unit
 
+    // Kompis: later som opptaket ble til tekst etter et lite øyeblikk.
+
+    private var sttListener: SttListener? = null
+
+    override fun kompisSttOpen(listener: SttListener) {
+        sttListener = listener
+    }
+
+    override fun kompisSttStartRecording() = sttListener?.onLevel(0.5f) ?: Unit
+
+    override fun kompisSttStopRecording(configJson: String) {
+        sttListener?.onLevel(0f)
+        sttListener?.onTranscribed(
+            """{"text":"Hei, dette er en test av tale til tekst.","usage":{"cost":0.00014,"seconds":2.4}}""",
+            2.4,
+            76_844,
+            640,
+        )
+    }
+
+    override fun kompisSttClose() {
+        sttListener = null
+    }
+
     // Ekko: later som lyden er hentet med en gang, med en tilfeldig lydbølge.
 
     override fun ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) =

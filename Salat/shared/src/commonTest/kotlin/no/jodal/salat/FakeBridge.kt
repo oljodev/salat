@@ -5,6 +5,7 @@ internal object FakeBridge : NativeBridge {
     private val storage = mutableMapOf<String, String>()
     var startedWith: String? = null
     var rolledWith: String? = null
+    var sttSentWith: String? = null
 
     /** Det Ekko har bedt Swift om, f.eks. `play clip1 from 2.0` eller `pause`. */
     val ekkoCalls = mutableListOf<String>()
@@ -32,6 +33,12 @@ internal object FakeBridge : NativeBridge {
     override fun rollLiveSession(historyJson: String) {
         rolledWith = historyJson
     }
+    override fun kompisSttOpen(listener: SttListener) = Unit
+    override fun kompisSttStartRecording() = Unit
+    override fun kompisSttStopRecording(configJson: String) {
+        sttSentWith = configJson
+    }
+    override fun kompisSttClose() = Unit
 
     override fun ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener) {
         ekkoCalls += "youtube $videoId"

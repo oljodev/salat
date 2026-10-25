@@ -60,6 +60,20 @@ interface NativeBridge {
      */
     fun rollLiveSession(historyJson: String)
 
+    // Kompis: test av tale til tekst gjennom OpenRouter.
+
+    /** Slår på mikrofonen, så opptak kan begynne med en gang. [listener] får lydnivået og resultatene. */
+    fun kompisSttOpen(listener: SttListener)
+
+    /** Begynner å ta vare på lyden fra mikrofonen. */
+    fun kompisSttStartRecording()
+
+    /** Stopper opptaket og sender lyden til OpenRouter. [configJson] er en `SttConfig` som JSON. */
+    fun kompisSttStopRecording(configJson: String)
+
+    /** Slår av mikrofonen. Et svar som er på vei, kommer likevel. */
+    fun kompisSttClose()
+
     // Ekko. Lyden til hver lyd ligger i en fil som heter det samme som lyden sin id.
 
     /** Henter lyden fra YouTube-videoen [videoId] og lagrer den som [clipId]. */
@@ -122,6 +136,20 @@ interface NativeBridge {
 
     /** En liten vibrasjon: `light`, `selection`, `rigid`, `success` eller `warning`. */
     fun haptic(kind: String)
+}
+
+/** Det Swift forteller om testen av tale til tekst. Kalles alltid på hovedtråden. */
+interface SttListener {
+    /** Lydnivået fra mikrofonen, fra 0 til 1. */
+    fun onLevel(level: Float)
+
+    /**
+     * Svaret fra OpenRouter kom. [responseJson] er svaret som det er, [audioSeconds] hvor langt
+     * opptaket var, [uploadBytes] hvor mye som ble sendt, og [millis] tiden fra opptaket stoppet.
+     */
+    fun onTranscribed(responseJson: String, audioSeconds: Double, uploadBytes: Int, millis: Long)
+
+    fun onError(message: String)
 }
 
 /** Hvordan det går med å hente en lyd. Kalles alltid på hovedtråden. */

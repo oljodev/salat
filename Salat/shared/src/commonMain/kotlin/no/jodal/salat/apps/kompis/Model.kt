@@ -38,6 +38,9 @@ enum class Role {
 data class KompisSettings(
     val voice: String = KompisVoice.Kore.id,
     val personality: String = DefaultPersonality,
+    /** Modellen og språket i testen av tale til tekst. Tomt språk betyr at modellen finner det selv. */
+    val sttModel: String = SttModel.VoxtralMini.id,
+    val sttLanguage: String = "no",
 )
 
 const val DefaultPersonality =
