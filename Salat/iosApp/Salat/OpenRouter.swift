@@ -1,4 +1,5 @@
 import Foundation
+import Shared
 
 /// Kall til OpenRouter sitt API. Svarene kommer alltid på hovedtråden.
 enum OpenRouter {
