@@ -10,8 +10,8 @@ struct BremsOpenedIntent: AppIntent {
     static let description = IntentDescription(
         "Legg denne i en automasjon som kjører når en app åpnes. Brems viser en pause når det er tid for det."
     )
-    // Starter i bakgrunnen, og hopper fram bare når det skal være pause.
-    static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
+    // Kjører bare i bakgrunnen, så Snarveier aldri avviser handlingen. Pausen kommer som et varsel.
+    static let supportedModes: IntentModes = [.background]
 
     @Parameter(title: "App", description: "Navnet på appen, f.eks. TikTok. Kan stå tomt.")
     var app: String?
@@ -22,17 +22,9 @@ struct BremsOpenedIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         let bridge = IosNativeBridge.shared
         guard BremsStoreKt.bremsOpened(bridge: bridge, app: app) else { return .result() }
-        WidgetActions.open("salat://brems/pause")
         if UIApplication.shared.applicationState == .active {
-            BremsStoreKt.bremsLog(bridge: bridge, text: "Brems var alt framme")
-            return .result()
-        }
-        do {
-            try await continueInForeground(alwaysConfirm: false)
-            BremsStoreKt.bremsLog(bridge: bridge, text: "Brems kom fram")
-        } catch {
-            // Slipper iOS ikke Brems fram, kommer i det minste et varsel.
-            BremsStoreKt.bremsLog(bridge: bridge, text: "Fikk ikke åpne Brems: \(error.localizedDescription)")
+            WidgetActions.open("salat://brems/pause")
+        } else {
             Notifications.shared.sendBremsNow(title: "Pause først", body: "Trykk her for å ta pausen i Brems.")
         }
         return .result()
