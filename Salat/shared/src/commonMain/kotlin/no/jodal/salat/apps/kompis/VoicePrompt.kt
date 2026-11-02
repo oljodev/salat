@@ -35,7 +35,6 @@ object VoicePrompt {
         Du svarer alltid med verktøyet say, og bare med det. Fyll ut feltene i denne rekkefølgen:
         - understood: det brukeren mest sannsynlig sa, skrevet riktig. Rett opp feilhørte ord, og skriv svensk eller dansk om til norsk, for eksempel «tusen tack» til «tusen takk». Bare det brukeren mente, uten kommentarer. Er det allerede riktig, skriv det som det står.
         - language: språket du svarer på: no, en eller es.
-        - style: valgfritt. Kort regi for stemmen, for eksempel «varm og rolig» eller «rask og lett». La det stå tomt når vanlig tone passer.
         - text: det som skal sies høyt. Svar på det du skrev i understood, ikke på det som ble hørt feil.
 
         # Språk

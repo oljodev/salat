@@ -234,7 +234,6 @@ private fun StatsLine(stats: LlmStats) {
     val understood = listOfNotNull(
         stats.understood?.let { "Forstod: «$it»" },
         stats.language?.let { "svarte på ${OpenRouter.languageName(it)}" },
-        stats.style?.let { "regi: $it" },
     )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (understood.isNotEmpty()) {

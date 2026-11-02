@@ -47,7 +47,7 @@ class SayTest {
     fun givesTheSpokenTextAsItIsWritten() {
         val stream = SayStream()
         val fragments = listOf(
-            """{"understo""", """od":"Tusen takk","lang""", """uage":"no","style":"varm","te""",
+            """{"understo""", """od":"Tusen takk","lang""", """uage":"no","te""",
             """xt":"Bare hyg""", """gelig! Og""", """ du?"}""",
         )
         val deltas = fragments.map { stream.add(args(it)) }
@@ -55,17 +55,15 @@ class SayTest {
         assertEquals("Bare hyggelig! Og du?", stream.text)
         assertEquals("Tusen takk", stream.understood)
         assertEquals("no", stream.language)
-        assertEquals("varm", stream.style)
         assertTrue(stream.usedTool)
     }
 
     @Test
-    fun emptyStyleAndLanguageNamesAreCleanedUp() {
+    fun languageNamesAreCleanedUp() {
         val stream = SayStream()
-        stream.add(args("""{"understood":" Hei ","language":"Norwegian","style":" ","text":"Hei"}"""))
+        stream.add(args("""{"understood":" Hei ","language":"Norwegian","text":"Hei"}"""))
         assertEquals("Hei", stream.understood)
         assertEquals("no", stream.language)
-        assertNull(stream.style)
     }
 
     @Test
@@ -84,22 +82,5 @@ class SayTest {
         stream.add(args("""{"text":"Hei"""))
         assertEquals("", stream.add(plain("Hei på deg")))
         assertEquals("Hei", stream.text)
-    }
-
-    @Test
-    fun picksAVoiceForTheLanguage() {
-        val voices = listOf("voice_3150", "en_paul_happy", "en_paul_neutral", "gb_jane_sad", "fr_marie_neutral", "es_ana_neutral")
-        assertEquals("voice_3150", VoiceChoice.pick(voices, "voice_3150", "no"))
-        assertEquals("voice_3150", VoiceChoice.pick(voices, "voice_3150", null))
-        assertEquals("en_paul_neutral", VoiceChoice.pick(voices, "voice_3150", "en"))
-        assertEquals("en_paul_happy", VoiceChoice.pick(voices, "en_paul_happy", "en"), "en engelsk stemme som er valgt, beholdes")
-        assertEquals("es_ana_neutral", VoiceChoice.pick(voices, "voice_3150", "es"))
-        assertEquals("voice_1", VoiceChoice.pick(listOf("voice_1", "voice_2"), "voice_1", "en"), "ingen stemme til språket")
-        assertEquals("a", VoiceChoice.pick(emptyList(), "a", "en"))
-        assertNull(VoiceChoice.pick(emptyList(), null, "en"))
-        assertEquals(
-            "en-US-Harper:MAI-Voice-2.1",
-            VoiceChoice.pick(listOf("nb-NO-Harper:MAI-Voice-2.1", "en-US-Harper:MAI-Voice-2.1"), "nb-NO-Harper:MAI-Voice-2.1", "en"),
-        )
     }
 }

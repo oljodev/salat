@@ -18,6 +18,8 @@ class MiniApp(
     val icon: MiniAppIcon,
     /** Fargen på kortet og toppen av mini-appen. */
     val color: Color,
+    /** Om kortet på forsiden bruker [color] som den er, uten å blandes med bakgrunnen. Teksten blir da hvit. */
+    val solidTile: Boolean = false,
     val section: Section = Section.Apps,
     /** Om mini-appen tegner sin egen topplinje med tilbakeknapp, i stedet for Salat sin. */
     val customTopBar: Boolean = false,

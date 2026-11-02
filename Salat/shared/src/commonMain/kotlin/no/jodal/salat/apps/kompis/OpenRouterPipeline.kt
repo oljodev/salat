@@ -336,25 +336,19 @@ class OpenRouterPipeline(
         bridge.speechEnqueue(id, store.openRouterKey, speechBody(text))
     }
 
-    /** Forespørselen til stemmen, med språket og regien språkmodellen ga. */
+    /** Forespørselen til stemmen. Stemmen og regien kommer fra innstillingene, aldri fra språkmodellen. */
     private fun speechBody(text: String): String = buildJsonObject {
         put("model", settings.ttsModel)
         put("input", text)
-        voice(stream.language)?.let { put("voice", it) }
-        listOfNotNull(settings.ttsInstructions.trim().ifEmpty { null }, stream.style)
-            .takeIf { it.isNotEmpty() }
-            ?.let { put("instructions", it.joinToString(". ")) }
+        voice()?.let { put("voice", it) }
+        settings.ttsInstructions.trim().ifEmpty { null }?.let { put("instructions", it) }
         put("response_format", "pcm")
     }.toString()
 
-    /**
-     * Stemmen som er valgt for modellen, ellers den første, de norske først. Svarer Kompis på engelsk
-     * eller spansk, og modellen har en stemme til språket, brukes den.
-     */
-    private fun voice(language: String?): String? {
+    /** Stemmen som er valgt for modellen, ellers den første, de norske først. */
+    private fun voice(): String? {
         val voices = ModelCache.tts.firstOrNull { it.id == settings.ttsModel }?.voices.orEmpty().sortedBy { !isNorwegianVoice(it) }
-        val selected = settings.ttsVoices[settings.ttsModel] ?: voices.firstOrNull()
-        return VoiceChoice.pick(voices, selected, language)
+        return settings.ttsVoices[settings.ttsModel] ?: voices.firstOrNull()
     }
 
     private val speech = object : SpeechListener {

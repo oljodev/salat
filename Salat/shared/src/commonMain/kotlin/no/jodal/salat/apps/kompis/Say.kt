@@ -104,7 +104,7 @@ internal object PartialJson {
 
 /**
  * Svaret fra språkmodellen mens det strømmer inn. Modellen svarer med verktøyet `say`, der den først
- * skriver hva den tror brukeren sa (`understood`), så språket, regien og til slutt det som skal sies
+ * skriver hva den tror brukeren sa (`understood`), så språket og til slutt det som skal sies
  * (`text`). Svarer den med vanlig tekst i stedet, brukes den som den er.
  */
 internal class SayStream {
@@ -120,10 +120,6 @@ internal class SayStream {
 
     /** Språket modellen svarer på (`no`, `en` eller `es`), når det er skrevet ferdig. */
     var language: String? = null
-        private set
-
-    /** Regi til stemmen, når det er skrevet ferdig og ikke tomt. */
-    var style: String? = null
         private set
 
     /** Det som skal sies, så langt. */
@@ -147,35 +143,10 @@ internal class SayStream {
         val fields = PartialJson.strings(arguments.toString())
         fields["understood"]?.takeIf { it.complete }?.let { understood = it.value.trim().ifEmpty { null } }
         fields["language"]?.takeIf { it.complete }?.let { language = OpenRouter.normalizeLanguage(it.value).ifEmpty { null } }
-        fields["style"]?.takeIf { it.complete }?.let { style = it.value.trim().ifEmpty { null } }
         val spoken = fields["text"]?.value.orEmpty()
         if (!spoken.startsWith(text)) return ""
         val added = spoken.substring(text.length)
         text = spoken
         return added
-    }
-}
-
-/** Velger stemmen ut fra språket, for modeller med stemmer som hører til ett språk. */
-internal object VoiceChoice {
-    /**
-     * Stemmen å bruke for [language]. Norsk, ukjent språk og modeller uten stemme til språket beholder
-     * [selected]. Ellers velges en stemme som hører til språket, helst en nøytral.
-     */
-    fun pick(voices: List<String>, selected: String?, language: String?): String? {
-        if (language == null || language == "no" || voices.isEmpty()) return selected
-        val matches = voices.filter { matches(it, language) }
-        if (matches.isEmpty()) return selected
-        if (selected != null && selected in matches) return selected
-        return matches.firstOrNull { "neutral" in it.lowercase() } ?: matches.first()
-    }
-
-    private fun matches(voice: String, language: String): Boolean {
-        val v = voice.lowercase()
-        return when (language) {
-            "en" -> v.startsWith("en-") || v.startsWith("en_") || v.startsWith("gb_") || v.startsWith("us_")
-            "es" -> v.startsWith("es-") || v.startsWith("es_")
-            else -> false
-        }
     }
 }

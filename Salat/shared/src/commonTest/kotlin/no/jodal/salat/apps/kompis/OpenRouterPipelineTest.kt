@@ -383,7 +383,7 @@ class OpenRouterPipelineTest {
     }
 
     @Test
-    fun englishAnswersUseAnEnglishVoiceAndTheStyleTheModelGave() {
+    fun theVoiceStaysTheSameWhateverTheModelAnswers() {
         store.update { it.copy(settings = it.settings.copy(ttsInstructions = "rolig")) }
         ModelCache.tts = listOf(
             OpenRouterModel(
@@ -393,15 +393,15 @@ class OpenRouterPipelineTest {
         )
         openAndGoToListening()
         say("Can you speak English?")
-        toolEvent("""{"understood":"Can you speak English?","language":"en","style":"varm","text":"Sure! I can."}""")
+        toolEvent("""{"understood":"Can you speak English?","language":"en","text":"Sure! I can."}""")
         chat.onDone(400)
 
         val first = Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject
         assertEquals("Sure!", first["input"]!!.jsonPrimitive.content)
-        assertEquals("en_paul_neutral", first["voice"]!!.jsonPrimitive.content)
-        assertEquals("rolig. varm", first["instructions"]!!.jsonPrimitive.content)
+        assertEquals("voice_3150", first["voice"]!!.jsonPrimitive.content)
+        assertEquals("rolig", first["instructions"]!!.jsonPrimitive.content)
 
-        // På norsk brukes stemmen som er valgt, uten regi fra modellen.
+        // Samme stemme på norsk.
         speech.onFinished()
         say("Takk")
         bridge.speechBodies.clear()

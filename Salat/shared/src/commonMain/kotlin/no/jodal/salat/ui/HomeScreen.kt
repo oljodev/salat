@@ -135,7 +135,9 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun AppTile(app: MiniApp, darkTheme: Boolean, onClick: () -> Unit) {
     val available = app.content != null
-    val colors = MaterialTheme.colorScheme
+    val colors = MaterialTheme.colorScheme.let {
+        if (app.solidTile) it.copy(onSurface = Color.White, onSurfaceVariant = Color(0xFF8E8E93)) else it
+    }
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
@@ -144,7 +146,7 @@ private fun AppTile(app: MiniApp, darkTheme: Boolean, onClick: () -> Unit) {
             .heightIn(min = 176.dp)
             .alpha(if (available) 1f else 0.75f)
             .clip(RoundedCornerShape(28.dp))
-            .background(colors.tint(app.color, darkTheme))
+            .background(if (app.solidTile) app.color else colors.tint(app.color, darkTheme))
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.Top) {

@@ -33,8 +33,6 @@ data class LlmStats(
     val understood: String? = null,
     /** Språket modellen svarte på. */
     val language: String? = null,
-    /** Regien modellen ga stemmen. */
-    val style: String? = null,
 ) {
     /** Hvor mange tokens i sekundet som kom etter det første. */
     val tokensPerSecond: Int?
@@ -227,7 +225,6 @@ class LlmTest(
             costUsd = usage?.get("cost")?.let { (it as? JsonPrimitive)?.doubleOrNull },
             understood = stream.understood,
             language = stream.language,
-            style = stream.style,
         )
         messages = messages + LlmMessage(Role.Kompis, text.ifEmpty { "(tomt svar)" }, stats)
         draft = null

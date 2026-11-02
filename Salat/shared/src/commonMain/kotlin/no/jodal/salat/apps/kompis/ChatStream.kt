@@ -139,10 +139,6 @@ private fun JsonObjectBuilder.sayTool() {
                     }
                     put("description", "Språket du svarer på.")
                 }
-                putJsonObject("style") {
-                    put("type", "string")
-                    put("description", "Valgfritt: kort regi for stemmen, for eksempel «varm og rolig». Tomt når vanlig tone passer.")
-                }
                 putJsonObject("text") {
                     put("type", "string")
                     put("description", "Det som skal sies høyt, som ren tekst slik det skal høres.")
