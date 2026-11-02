@@ -54,7 +54,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Kotlin-koden bygges som et statisk rammeverk av Gradle-steget under.
-        FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+        KOTLIN_FRAMEWORK_BUILD_TYPE: $(CONFIGURATION)
+        FRAMEWORK_SEARCH_PATHS: $(SRCROOT)/../shared/build/xcode-frameworks/$(KOTLIN_FRAMEWORK_BUILD_TYPE)/$(SDK_NAME)
         OTHER_LDFLAGS: $(inherited) -framework Shared
         # Gradle-steget må kunne lese og skrive utenfor Xcode sin sandkasse.
         ENABLE_USER_SCRIPT_SANDBOXING: NO
@@ -63,7 +64,9 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           cd "$SRCROOT/.."
-          ./gradlew :shared:embedAndSignAppleFrameworkForXcode
+          # Kotlin-pluginen prioriterer CONFIGURATION over KOTLIN_FRAMEWORK_BUILD_TYPE.
+          # Overstyr bare for Gradle; Swift og resten av Xcode-bygget forblir i Release.
+          CONFIGURATION="${KOTLIN_FRAMEWORK_BUILD_TYPE:-$CONFIGURATION}" ./gradlew :shared:embedAndSignAppleFrameworkForXcode
   SalatWidgets:
     type: app-extension
     platform: iOS

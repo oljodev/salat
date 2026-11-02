@@ -39,6 +39,7 @@ jobs:
       # Hvert bygg får et nytt versjonsnummer, så SideStore ser at det finnes en oppdatering.
       VERSION: 0.1.${{ github.run_number }}
       BUILD_NUMBER: ${{ github.run_number }}
+      KOTLIN_FRAMEWORK_BUILD_TYPE: ${{ inputs.release && 'Release' || 'Debug' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -49,13 +50,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # Debug-bygget av Kotlin bruker ferdiglagde biblioteker i ~/.konan, og samme mappe tar vare på det
-      # Kotlin/Native lager selv. Nøkkelen har «debug» i seg, så første bygg etter bytte lagrer en ny cache.
+      # En ny nøkkel per kjøring lar cachen vokse med nye kompilerte avhengigheter.
+      # restore-keys henter den nyeste kompatible cachen fra et tidligere bygg.
       - name: Cache Kotlin/Native
         uses: actions/cache@v6
         with:
           path: ~/.konan
-          key: konan-debug-${{ runner.os }}-${{ hashFiles('Salat/gradle/libs.versions.toml') }}
+          key: konan-v2-${{ runner.os }}-${{ runner.arch }}-${{ env.KOTLIN_FRAMEWORK_BUILD_TYPE }}-${{ hashFiles('Salat/gradle/libs.versions.toml', 'Salat/gradle/wrapper/gradle-wrapper.properties') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            konan-v2-${{ runner.os }}-${{ runner.arch }}-${{ env.KOTLIN_FRAMEWORK_BUILD_TYPE }}-${{ hashFiles('Salat/gradle/libs.versions.toml', 'Salat/gradle/wrapper/gradle-wrapper.properties') }}-
 
       - name: Generate Xcode project
         working-directory: Salat/iosApp
@@ -72,8 +75,6 @@ jobs:
       # hånd med «release» på for en ferdig optimalisert Kotlin-del.
       - name: Build app (unsigned)
         working-directory: Salat/iosApp
-        env:
-          KOTLIN_FRAMEWORK_BUILD_TYPE: ${{ inputs.release && 'release' || 'debug' }}
         run: |
           xcodebuild build \
             -project Salat.xcodeproj \
@@ -83,6 +84,8 @@ jobs:
             -derivedDataPath build/DerivedData \
             MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            KOTLIN_FRAMEWORK_BUILD_TYPE="$KOTLIN_FRAMEWORK_BUILD_TYPE" \
+            -showBuildTimingSummary \
             COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
