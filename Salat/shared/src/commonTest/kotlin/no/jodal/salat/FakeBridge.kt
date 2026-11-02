@@ -153,6 +153,9 @@ internal object FakeBridge : NativeBridge {
     override fun ekkoStop() {
         ekkoCalls += "stop"
     }
+    override fun ekkoSetVolume(volume: Float) {
+        ekkoCalls += "volume $volume"
+    }
 
     /** Det widgetene sist fikk, per navn. */
     val widgetData = mutableMapOf<String, String>()

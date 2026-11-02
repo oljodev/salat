@@ -195,6 +195,8 @@ private object PreviewBridge : NativeBridge {
 
     override fun ekkoStop() = Unit
 
+    override fun ekkoSetVolume(volume: Float) = Unit
+
     override fun saveWidgetData(name: String, json: String) = Unit
 
     override fun haptic(kind: String) = Unit

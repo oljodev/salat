@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,7 +29,12 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,6 +52,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.sqrt
 import no.jodal.salat.Haptics
 import no.jodal.salat.apps.ekko.Clip
 import no.jodal.salat.apps.ekko.EkkoPlayer
@@ -154,10 +161,38 @@ fun NowPlayingScreen(store: EkkoStore, player: EkkoPlayer, onClose: () -> Unit, 
                     haptic = Haptics::select,
                 )
             }
+            Spacer(Modifier.height(16.dp))
+            VolumeSlider(store.data.volume, player::setVolume)
             Spacer(Modifier.weight(0.4f))
         }
     }
 }
+
+/**
+ * Volumet i Ekko, oppå volumet på telefonen. Glidebryteren går i en kurve, så det er lett å treffe
+ * de lave verdiene.
+ */
+@Composable
+private fun VolumeSlider(volume: Float, onChange: (Float) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Icon(Icons.Rounded.VolumeDown, contentDescription = null, tint = EkkoPalette.TextDim, modifier = Modifier.size(20.dp))
+        Slider(
+            value = sqrt(volume).coerceIn(MinSlider, 1f),
+            onValueChange = { onChange(it * it) },
+            valueRange = MinSlider..1f,
+            colors = SliderDefaults.colors(
+                thumbColor = EkkoPalette.Lime,
+                activeTrackColor = EkkoPalette.Lime,
+                inactiveTrackColor = Color.White.copy(alpha = 0.12f),
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        Icon(Icons.Rounded.VolumeUp, contentDescription = null, tint = EkkoPalette.TextDim, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Lengst til venstre er volumet 1 %, så lyden aldri blir helt av. */
+private const val MinSlider = 0.1f
 
 /** Lydbølgen som fremdriftslinje. Trykk eller dra for å hoppe. */
 @Composable

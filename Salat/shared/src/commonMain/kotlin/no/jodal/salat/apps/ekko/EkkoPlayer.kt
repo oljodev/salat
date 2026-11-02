@@ -108,6 +108,12 @@ class EkkoPlayer private constructor(
         if (loadedClipId == clip.id) bridge.ekkoSeek(clip.startSeconds + position)
     }
 
+    /** Setter volumet i Ekko, oppå volumet på telefonen. */
+    fun setVolume(volume: Float) {
+        store.setVolume(volume)
+        bridge.ekkoSetVolume(store.data.volume)
+    }
+
     fun toggleShuffle() {
         val shuffle = !store.data.shuffle
         store.setShuffle(shuffle)
@@ -153,6 +159,7 @@ class EkkoPlayer private constructor(
         isPlaying = false
         loadedClipId = null
         preview = Preview(clipId, startSeconds, endSeconds, startSeconds)
+        bridge.ekkoSetVolume(store.data.volume)
         bridge.ekkoPlay(clipId, startSeconds, endSeconds, startSeconds, "", "", false, this)
     }
 
@@ -177,6 +184,7 @@ class EkkoPlayer private constructor(
         error = null
         loadedClipId = clip.id
         isPlaying = true
+        bridge.ekkoSetVolume(store.data.volume)
         bridge.ekkoPlay(clip.id, clip.startSeconds, clip.endSeconds, from, clip.title, clip.artist, true, this)
     }
 

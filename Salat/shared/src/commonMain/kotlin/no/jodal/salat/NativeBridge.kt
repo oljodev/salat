@@ -186,6 +186,9 @@ interface NativeBridge {
 
     fun ekkoStop()
 
+    /** Volumet i Ekko, fra 0 til 1. Ganges med volumet på telefonen, så man kan gå lavere enn knappene gir. */
+    fun ekkoSetVolume(volume: Float)
+
     /**
      * Lagrer [json] der widgetene kan lese det, under navnet [name] (f.eks. `ekko`), og ber
      * widgetene tegne seg på nytt hvis noe er endret.

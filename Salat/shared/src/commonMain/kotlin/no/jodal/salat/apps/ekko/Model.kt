@@ -12,6 +12,8 @@ data class EkkoData(
     val repeat: Repeat = Repeat.Off,
     /** Lydene på lydbrettet i widgeten, i rekkefølge. */
     val soundboard: List<String> = emptyList(),
+    /** Volumet i Ekko fra 0 til 1, oppå volumet på telefonen. */
+    val volume: Float = 1f,
 )
 
 /** En lyd: et utsnitt av lyden fra en video. */

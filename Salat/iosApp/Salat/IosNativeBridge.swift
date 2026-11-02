@@ -223,6 +223,10 @@ final class IosNativeBridge: NSObject, NativeBridge {
         UIApplication.shared.open(url)
     }
 
+    func ekkoSetVolume(volume: Float) {
+        EkkoAudio.shared.setVolume(volume)
+    }
+
     func bremsNotify(noticesJson: String) {
         Notifications.shared.scheduleBrems(noticesJson)
     }

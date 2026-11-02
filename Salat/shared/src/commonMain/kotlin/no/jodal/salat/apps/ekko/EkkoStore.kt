@@ -81,6 +81,8 @@ class EkkoStore private constructor(private val bridge: NativeBridge) {
 
     fun setShuffle(shuffle: Boolean) = update { it.copy(shuffle = shuffle) }
 
+    fun setVolume(volume: Float) = update { it.copy(volume = volume.coerceIn(0f, 1f)) }
+
     fun setRepeat(repeat: Repeat) = update { it.copy(repeat = repeat) }
 
     fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()

@@ -18,6 +18,8 @@ final class EkkoAudio: NSObject, AVAudioPlayerDelegate {
     private var timer: Timer?
     private var lastReported = -1.0
     private var observing = false
+    /// Volumet i Ekko, oppå volumet på telefonen.
+    private var volume: Float = 1
 
     func play(
         clipId: String,
@@ -44,6 +46,7 @@ final class EkkoAudio: NSObject, AVAudioPlayerDelegate {
         }
         activateSession()
         player.delegate = self
+        player.volume = volume
         player.prepareToPlay()
         endSeconds = min(end, player.duration)
         player.currentTime = max(0, min(from, endSeconds))
@@ -55,6 +58,11 @@ final class EkkoAudio: NSObject, AVAudioPlayerDelegate {
         }
         updateNowPlaying()
         report { $0.onPlaying(playing: true) }
+    }
+
+    func setVolume(_ volume: Float) {
+        self.volume = max(0, min(1, volume))
+        player?.volume = self.volume
     }
 
     func pause() {
