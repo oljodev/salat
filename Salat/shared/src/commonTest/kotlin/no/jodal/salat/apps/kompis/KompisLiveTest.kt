@@ -13,6 +13,22 @@ import no.jodal.salat.apps.kompis.ui.LiveStatus
 
 class KompisLiveTest {
     @Test
+    fun favoritingAnActiveConversationSurvivesTheNextReply() {
+        live.start(null)
+        live.onUserText("Hei")
+        live.onKompisText("Hallo")
+        live.onTurnComplete()
+        val id = live.conversationId!!
+        store.toggleFavorite(id)
+        live.onUserText("Fortsett")
+        live.onKompisText("Ja!")
+        live.onTurnComplete()
+        live.end()
+        assertTrue(store.conversation(id)!!.favorite)
+        assertEquals(4, store.conversation(id)!!.messages.size)
+    }
+
+    @Test
     fun metricsStayWithTheirMessageAndSurviveSerialization() {
         live.start(null)
         live.onUserText("Hei")

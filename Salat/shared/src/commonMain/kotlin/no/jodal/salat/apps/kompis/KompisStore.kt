@@ -50,11 +50,18 @@ class KompisStore private constructor(private val bridge: NativeBridge) {
 
     fun deleteConversation(id: String) = update { it.copy(conversations = it.conversations.filter { c -> c.id != id }) }
 
+    fun toggleFavorite(id: String) = update {
+        it.copy(conversations = it.conversations.map { c -> if (c.id == id) c.copy(favorite = !c.favorite) else c })
+    }
+
     fun renameConversation(id: String, title: String) = update {
         it.copy(conversations = it.conversations.map { c -> if (c.id == id) c.copy(title = title.trim()) else c })
     }
 
     fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()
+
+    internal fun openRouterGet(path: String, key: String, onResult: (String?, String?) -> Unit) =
+        bridge.openRouterGet(path, key, onResult)
 
     private fun load(): KompisData = bridge.loadText(StorageKey)
         ?.let { runCatching { json.decodeFromString(KompisData.serializer(), it) }.getOrNull() }

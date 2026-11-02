@@ -19,6 +19,7 @@ data class Conversation(
     val messages: List<Message> = emptyList(),
     /** Hvor lenge man har snakket til sammen, i sekunder. */
     val durationSeconds: Int = 0,
+    val favorite: Boolean = false,
 )
 
 @Serializable
@@ -73,6 +74,7 @@ data class KompisSettings(
     /** Språkmodellen og leverandørene i rekkefølge. Ingen leverandører lar OpenRouter velge. */
     val llmModel: String = DefaultLlmModel,
     val llmProviders: List<String> = DefaultLlmProviders,
+    val llmRouting: LlmRouting = LlmRouting(),
     /** Testen av tekst til tale: modellen, stemmen og samplingsfrekvensen per modell (0 = finn ut selv). */
     val ttsModel: String = DefaultTtsModel,
     val ttsVoices: Map<String, String> = emptyMap(),

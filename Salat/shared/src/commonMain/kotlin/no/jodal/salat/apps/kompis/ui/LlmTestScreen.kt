@@ -202,6 +202,9 @@ private fun Providers(test: LlmTest) {
         val names = order.map { slug -> test.providers.firstOrNull { it.slug == slug }?.name ?: slug }
         Text(
             when {
+                test.routing.strategy == "auto" -> "OpenRouter velger automatisk. Prisgrensene fra innstillingene gjelder."
+                test.routing.strategy == "latency" -> "Prioriterer lavest latency${if (names.isEmpty()) "" else " blant ${names.joinToString()}"}. Trykk på en leverandør for å bruke egen rekkefølge."
+                test.routing.strategy == "price" -> "Prioriterer lavest pris${if (names.isEmpty()) "" else " blant ${names.joinToString()}"}. Trykk på en leverandør for å bruke egen rekkefølge."
                 names.isEmpty() && test.isLoadingProviders -> "Henter leverandørene …"
                 names.isEmpty() -> "OpenRouter velger leverandør, og bytter hvis én feiler."
                 names.size == 1 -> "Bruker bare ${names.first()}."

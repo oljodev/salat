@@ -76,125 +76,96 @@ fun KompisSettingsContent(store: KompisStore, onClose: (save: () -> Unit) -> Uni
     val colors = MaterialTheme.colorScheme
     var apiKey by remember { mutableStateOf(store.apiKey) }
     var openRouterKey by remember { mutableStateOf(store.openRouterKey) }
-    var engine by remember { mutableStateOf(store.engine) }
-    var handsFree by remember { mutableStateOf(store.data.settings.handsFree) }
-    var voice by remember { mutableStateOf(store.data.settings.voice) }
-    var personality by remember { mutableStateOf(store.data.settings.personality) }
+    var draft by remember { mutableStateOf(store.data.settings) }
+    var showGemini by remember { mutableStateOf(false) }
+    var maxInput by remember { mutableStateOf(draft.llmRouting.maxInput?.toString().orEmpty()) }
+    var maxOutput by remember { mutableStateOf(draft.llmRouting.maxOutput?.toString().orEmpty()) }
+    val validPrices = no.jodal.salat.apps.kompis.validPriceLimit(maxInput) && no.jodal.salat.apps.kompis.validPriceLimit(maxOutput)
     val uriHandler = LocalUriHandler.current
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(8.dp)) {
             TextButton(onClick = { onClose {} }) { Text("Avbryt", style = MaterialTheme.typography.bodyLarge) }
             Text("Innstillinger", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-            TextButton(onClick = {
+            TextButton(enabled = validPrices, onClick = {
                 onClose {
                     store.saveApiKey(apiKey)
                     store.saveOpenRouterKey(openRouterKey)
-                    store.update { it.copy(settings = it.settings.copy(engine = engine.id, handsFree = handsFree, voice = voice, personality = personality.trim().ifEmpty { DefaultPersonality })) }
+                    store.update { it.copy(settings = draft.copy(
+                        personality = draft.personality.trim().ifEmpty { DefaultPersonality },
+                        llmRouting = draft.llmRouting.copy(
+                            maxInput = no.jodal.salat.apps.kompis.parsePriceLimit(maxInput),
+                            maxOutput = no.jodal.salat.apps.kompis.parsePriceLimit(maxOutput),
+                        ),
+                    )) }
                 }
-            }) {
-                Text("Lagre", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            }
+            }) { Text("Lagre", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold) }
         }
 
         Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            SettingsSection("Motor") {
-                KompisEngine.entries.forEachIndexed { index, option ->
-                    if (index > 0) SectionDivider()
-                    RadioRow(option.label, option.description, selected = option == engine) { engine = option }
-                }
-                if (engine == KompisEngine.OpenRouter) {
-                    SectionDivider()
-                    val settings = store.data.settings
-                    Text(
-                        "Modellene velger du i testene på forsiden:\n" +
-                            "Tale til tekst: ${settings.sttModel.substringAfter('/')}\n" +
-                            "Språkmodell: ${settings.llmModel.substringAfter('/')}\n" +
-                            "Tekst til tale: ${settings.ttsModel.substringAfter('/')}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant,
-                    )
-                }
-            }
-
-            if (engine == KompisEngine.OpenRouter) {
-                SettingsSection("Samtale") {
-                    RadioRow("Hold inne og snakk", "Du holder inne en knapp mens du snakker. Best når telefonen er i hånden.", selected = !handsFree) { handsFree = false }
-                    SectionDivider()
-                    RadioRow("Håndfri", "Kompis hører selv når du snakker og når du er ferdig, og du kan avbryte den. Best med AirPods og låst skjerm.", selected = handsFree) { handsFree = true }
-                }
-            }
-
-            SettingsSection("Gemini-nøkkel") {
-                KeyField(apiKey, onValueChange = { apiKey = it })
-                SectionDivider()
-                Text(
-                    "Nøkkelen lagres bare i nøkkelringen på telefonen.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
-                Text(
-                    "Lag en nøkkel i Google AI Studio",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.primary,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { uriHandler.openUri("https://aistudio.google.com/apikey") },
-                )
-            }
-
-            SettingsSection("OpenRouter-nøkkel") {
+            SettingsSection("OpenRouter") {
                 KeyField(openRouterKey, onValueChange = { openRouterKey = it })
-                SectionDivider()
-                Text(
-                    "Brukes til å teste tale til tekst. Lagres bare i nøkkelringen på telefonen.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
-                Text(
-                    "Lag en nøkkel hos OpenRouter",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = colors.primary,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { uriHandler.openUri("https://openrouter.ai/settings/keys") },
-                )
+                Text("Nøkkelen brukes til alle tre stegene og lagres bare i nøkkelringen på telefonen.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                TextButton(onClick = { uriHandler.openUri("https://openrouter.ai/settings/keys") }) { Text("Lag en OpenRouter-nøkkel") }
             }
 
-            SettingsSection("Stemme i Gemini Live") {
-                KompisVoice.entries.forEachIndexed { index, option ->
-                    if (index > 0) SectionDivider()
-                    RadioRow(option.id, option.description, selected = option.id == voice) { voice = option.id }
-                }
+            OpenRouterModels(store, openRouterKey, draft) { draft = it }
+
+            SettingsSection("Makspris for språkmodellen") {
+                Text("USD per million tokens. Tomt felt betyr ingen grense. 0 betyr bare gratis.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                PriceLimit("Tokens inn", maxInput) { maxInput = it }
+                PriceLimit("Tokens ut", maxOutput) { maxOutput = it }
+                Text("Hvis ingen leverandør oppfyller prisgrensene, får du en feil i stedet for et dyrere svar. Grensene gjelder LLM-en, ikke lydstegene.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            }
+
+            SettingsSection("Samtale") {
+                RadioRow("Hold inne og snakk", "Hold inne knappen mens du snakker.", selected = !draft.handsFree) { draft = draft.copy(handsFree = false) }
+                SectionDivider()
+                RadioRow("Håndfri", "Kompis hører når du snakker og når du er ferdig. Du kan avbryte den.", selected = draft.handsFree) { draft = draft.copy(handsFree = true) }
             }
 
             SettingsSection("Personlighet") {
                 BasicTextField(
-                    value = personality,
-                    onValueChange = { personality = it },
+                    value = draft.personality,
+                    onValueChange = { draft = draft.copy(personality = it) },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface),
                     cursorBrush = SolidColor(colors.primary),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 110.dp),
                 )
                 SectionDivider()
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Hvordan Kompis skal være og snakke.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { personality = DefaultPersonality }) { Text("Tilbakestill") }
+                    Text("Hvordan Kompis skal være og snakke.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { draft = draft.copy(personality = DefaultPersonality) }) { Text("Tilbakestill") }
                 }
             }
 
-            Text(
-                (if (engine == KompisEngine.GeminiLive) "Kompis bruker Gemini 3.8 Live." else "Kompis bruker modeller fra OpenRouter.") +
-                    " Samtalene lagres bare på telefonen.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+            Text("Trykk Lagre for å ta valgene i bruk. Motorbytte gjelder neste samtaleøkt. Samtalene lagres bare på telefonen.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+
+            if (showGemini) {
+                SettingsSection("Gemini Live") {
+                    Text("Gemini Live bruker sin egen nøkkel og stemme, i stedet for de tre OpenRouter-stegene.", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    KeyField(apiKey, onValueChange = { apiKey = it })
+                    TextButton(onClick = { uriHandler.openUri("https://aistudio.google.com/apikey") }) { Text("Lag en nøkkel i Google AI Studio") }
+                    ChoiceMenu("Stemme", draft.voice, KompisVoice.entries.map { it.id to "${it.id} – ${it.description}" }) { draft = draft.copy(voice = it) }
+                    TextButton(onClick = { draft = draft.copy(engine = KompisEngine.OpenRouter.id); showGemini = false }) { Text("Slå av Gemini Live og bruk OpenRouter") }
+                }
+            }
+            TextButton(
+                onClick = {
+                    if (showGemini) showGemini = false
+                    else { showGemini = true; draft = draft.copy(engine = KompisEngine.GeminiLive.id) }
+                },
                 modifier = Modifier.fillMaxWidth(),
-            )
+            ) {
+                Text(when {
+                    showGemini -> "Skjul Gemini Live-innstillinger"
+                    draft.engine == KompisEngine.GeminiLive.id -> "Gemini Live er på · vis innstillinger"
+                    else -> "Slå på Gemini Live"
+                })
+            }
             Box(Modifier.height(32.dp))
         }
     }

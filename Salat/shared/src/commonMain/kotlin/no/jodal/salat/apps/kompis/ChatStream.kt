@@ -69,6 +69,7 @@ internal object LlmRequest {
         prompt: String,
         messages: List<Pair<Role, String>>,
         tools: Boolean = true,
+        routing: LlmRouting = LlmRouting(),
     ): String = buildJsonObject {
         put("model", modelId)
         put("stream", true)
@@ -102,12 +103,7 @@ internal object LlmRequest {
                 putJsonObject("function") { put("name", "say") }
             }
         }
-        if (providers.isNotEmpty()) {
-            putJsonObject("provider") {
-                putJsonArray("order") { providers.forEach { add(it) } }
-                put("allow_fallbacks", false)
-            }
-        }
+        llmProviderPreferences(providers, routing)
     }.toString()
 }
 

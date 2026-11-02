@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,6 +74,7 @@ fun ConversationScreen(
     onContinue: () -> Unit,
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
+    onToggleFavorite: () -> Unit,
     startRenaming: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -131,6 +134,11 @@ fun ConversationScreen(
                         } else {
                             CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Tilbake", onClick = onBack)
                             Spacer(Modifier.weight(1f))
+                            CircleIconButton(
+                                if (conversation.favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                if (conversation.favorite) "Fjern fra favoritter" else "Legg til i favoritter",
+                                onClick = onToggleFavorite,
+                            )
                             CircleIconButton(Icons.Rounded.Edit, "Endre navn", onClick = ::startRenaming)
                             CircleIconButton(Icons.Rounded.DeleteOutline, "Slett samtalen", onClick = { confirmDelete = true })
                         }

@@ -84,6 +84,8 @@ class LlmTest(
     /** Leverandørene som skal prøves, i rekkefølge. Tom lar OpenRouter velge. */
     val providerOrder: List<String> get() = store.data.settings.llmProviders
 
+    val routing: LlmRouting get() = store.data.settings.llmRouting
+
     fun modelName(id: String): String = models.firstOrNull { it.id == id }?.shortName ?: id.substringAfter('/')
 
     // Det som måles mens et svar strømmer.
@@ -140,7 +142,7 @@ class LlmTest(
     /** Legger leverandøren sist i rekkefølgen, eller fjerner den. */
     fun toggleProvider(slug: String) {
         val order = if (slug in providerOrder) providerOrder - slug else providerOrder + slug
-        store.update { it.copy(settings = it.settings.copy(llmProviders = order)) }
+        store.update { it.copy(settings = it.settings.copy(llmProviders = order, llmRouting = it.settings.llmRouting.copy(strategy = "manual"))) }
     }
 
     /** Instruksjonene modellen får, slik de er nå. */
@@ -183,6 +185,7 @@ class LlmTest(
     internal fun requestBody(): String = LlmRequest.body(
         modelId = modelId,
         providers = providerOrder,
+        routing = store.data.settings.llmRouting,
         model = models.firstOrNull { it.id == modelId },
         prompt = prompt(),
         messages = messages.map { it.role to it.text },

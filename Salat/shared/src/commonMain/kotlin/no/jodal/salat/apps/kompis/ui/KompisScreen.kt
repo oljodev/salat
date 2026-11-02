@@ -58,6 +58,14 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.saveable.rememberSaveable
+import no.jodal.salat.apps.kompis.HistorySearch
 import no.jodal.salat.resources.Res
 import org.jetbrains.compose.resources.DrawableResource
 import androidx.compose.runtime.Composable
@@ -106,6 +114,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
         var destination by remember { mutableStateOf<KompisDestination>(KompisDestination.Home) }
         var showSettings by remember { mutableStateOf(false) }
         var showTranscript by remember { mutableStateOf(false) }
+        var historyQuery by rememberSaveable { mutableStateOf("") }
         val mascot = KompisMascots.current
 
         // «Snakk med Kompis» fra widgeten eller kontrollsenteret starter en samtale med en gang.
@@ -144,6 +153,8 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                     onReturnToLive = { destination = KompisDestination.Live(live.conversationId) },
                     onOpen = { destination = KompisDestination.Chat(it.id) },
                     onSettings = { showSettings = true },
+                    query = historyQuery,
+                    onQueryChange = { historyQuery = it },
                 )
                 is KompisDestination.Chat -> {
                     val conversation = store.conversation(current.id)
@@ -162,6 +173,7 @@ fun KompisScreen(bridge: NativeBridge, onBack: () -> Unit) {
                                 destination = KompisDestination.Live(conversation.id)
                             },
                             onRename = { store.renameConversation(conversation.id, it) },
+                            onToggleFavorite = { store.toggleFavorite(conversation.id) },
                             onDelete = {
                                 store.deleteConversation(conversation.id)
                                 destination = KompisDestination.Home
@@ -216,11 +228,15 @@ fun KompisHome(
     onReturnToLive: () -> Unit,
     onOpen: (Conversation) -> Unit,
     onSettings: () -> Unit,
+    query: String,
+    onQueryChange: (String) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val now = store.nowMillis()
-    val conversations = store.data.conversations.sortedByDescending { it.updatedAtMillis }
-    val grouped = conversations.groupBy { periodOf(it.updatedAtMillis, now) }
+    val search = remember(query) { HistorySearch(query) }
+    val conversations = store.data.conversations.filter(search::matches).sortedByDescending { it.updatedAtMillis }
+    val favorites = conversations.filter { it.favorite }
+    val grouped = conversations.filterNot { it.favorite }.groupBy { periodOf(it.updatedAtMillis, now) }
     var swipedOpen by remember { mutableStateOf<String?>(null) }
     var toDelete by remember { mutableStateOf<Conversation?>(null) }
 
@@ -273,21 +289,41 @@ fun KompisHome(
                 modifier = Modifier.padding(top = 36.dp, bottom = 4.dp),
             )
         }
+        item(key = "search") {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { swipedOpen = null; onQueryChange(it) },
+                placeholder = { Text("Søk i samtaler") },
+                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Tøm søket")
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         if (conversations.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    "Samtalene dine lagres her, så du kan lese dem og fortsette der dere slapp.",
+                    if (query.isNotBlank()) "Ingen samtaler passer til søket. Prøv andre søkeord."
+                    else "Samtalene dine lagres her, så du kan lese dem og fortsette der dere slapp.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
-        for (period in Period.entries) {
-            val items = grouped[period] ?: continue
-            item(key = "period-$period") {
+        val sections = buildList {
+            if (favorites.isNotEmpty()) add("Favoritter" to favorites)
+            Period.entries.forEach { period -> grouped[period]?.let { add(period.label to it) } }
+        }
+        for ((label, items) in sections) {
+            item(key = "section-$label") {
                 Text(
-                    period.label,
+                    label,
                     style = MaterialTheme.typography.labelLarge,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(top = 20.dp, bottom = 2.dp),
@@ -303,6 +339,8 @@ fun KompisHome(
                         ConversationRow(
                             conversation,
                             now,
+                            preview = search.preview(conversation),
+                            onToggleFavorite = { store.toggleFavorite(conversation.id) },
                             onClick = { if (swipedOpen != null) swipedOpen = null else onOpen(conversation) },
                         )
                     }
@@ -489,7 +527,7 @@ private fun SwipeToDelete(
 }
 
 @Composable
-private fun ConversationRow(conversation: Conversation, nowMillis: Long, onClick: () -> Unit) {
+private fun ConversationRow(conversation: Conversation, nowMillis: Long, preview: String?, onToggleFavorite: () -> Unit, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Column(
         verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -515,10 +553,17 @@ private fun ConversationRow(conversation: Conversation, nowMillis: Long, onClick
                 color = colors.onSurfaceVariant,
                 modifier = Modifier.padding(start = 12.dp),
             )
+            IconButton(onClick = onToggleFavorite) {
+                Icon(
+                    if (conversation.favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    contentDescription = if (conversation.favorite) "Fjern fra favoritter" else "Legg til i favoritter",
+                    tint = if (conversation.favorite) colors.primary else colors.onSurfaceVariant,
+                )
+            }
         }
-        conversation.messages.lastOrNull()?.let {
+        preview?.let {
             Text(
-                it.text,
+                it,
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant,
                 maxLines = 2,

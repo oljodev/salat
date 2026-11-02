@@ -11,13 +11,20 @@ Forsiden har to deler: **Appene dine** og **Verktøy**.
 | Mini-app | Del | Hva den gjør |
 | --- | --- | --- |
 | Rise | Appene dine | Alarmer og varsler i grupper, med gjentakelser og slumring. Se [planen](docs/rise.md). |
-| Kompis | Appene dine | Snakk med Gemini Live med stemmen, også med skjermen av. Samtalene lagres og kan fortsettes. Bruker `gemini-3.8-live`, og husker samtalen som tekst for å holde prisen nede. Kan i stedet bruke OpenRouter med tale til tekst, en språkmodell og tekst til tale hver for seg: hold inne en knapp for å snakke, så leses svaret opp setning for setning mens det skrives. Modellene velges i testene på forsiden, og tiden for hvert steg vises. |
+| Kompis | Appene dine | Snakk med Gemini Live med stemmen, også med skjermen av. Samtalene lagres og kan fortsettes. Bruker `gemini-3.8-live`, og husker samtalen som tekst for å holde prisen nede. Kan i stedet bruke OpenRouter med tale til tekst, en språkmodell og tekst til tale hver for seg: hold inne en knapp for å snakke, så leses svaret opp setning for setning mens det skrives. Modellene velges i innstillingene for alle tre steg. Testene på forsiden viser tiden for hvert steg. |
 | Ekko | Appene dine | Lyder og sitater fra YouTube Shorts, Snapchat Spotlight og videoer på telefonen. Klipp ut biten du vil ha, gi den navn og lag spillelister. Spiller med skjermen av, og kan styres fra låseskjermen. |
 | Brems | Appene dine | Mindre scrolling. En kort pause hver gang du åpner en app du vil bruke mindre, varsel etter 5 minutter, og en pause på 60 sekunder etter 10 minutter. Mål per app, f.eks. under 15 minutter Snapchat om dagen, med rekker, og statistikk for uke og måned. Alt kan stilles inn. Krever to automasjoner i Snarveier, se oppsettet i Brems. |
 | Fornyelse | Verktøy | Viser hvor lenge det er til appen må fornyes i SideStore. Salat varsler også dagen før. |
 | Varseltest | Verktøy | Sender testvarsler og testalarmer, så du kan sjekke at varsler, alarmer og lyd virker. |
 
 I Kompis kan du holde inne på en melding og velge **Vis meldingsinfo**. Nye svar gjennom OpenRouter lagrer modell, leverandør, omtrentlig TPS, latency, tokenforbruk og LLM-kostnad når tallene finnes. Talegjenkjenning og tid til lyd vises separat. Eldre meldinger har ikke målinger, og Gemini Live viser foreløpig bare modellnavnet.
+
+Søkefeltet over samtalehistorikken søker i både titler og meldinger. Trykk på stjernen i listen eller inne i en samtale for å legge den til i favoritter. Favorittene ligger øverst og filtreres også når du søker.
+
+Maskoten hilser når du åpner Kompis og når samtalen kobles til, viser tenkeprikker mens den tenker og hviler når mikrofonen er av. Trykk på figuren for små reaksjoner med sprett, hjerte og glimt. Bevegelsene bruker de eksisterende figurene; ansiktene er uendret.
+
+Kompis-innstillingene samler modellvalg for tale til tekst, språkmodell og tekst til tale, samt språk, stemme og stemmestil. For språkmodellen kan du rangere valgte leverandører eller prioritere lavest latency, lavest pris eller automatisk valg. Separate makspriser for tokens inn og ut oppgis i USD per million tokens; tomt betyr ingen grense, og 0 betyr bare gratis. Prisgrensene sendes også fra LLM-testen. Lydendepunktene hos OpenRouter støtter foreløpig ikke disse leverandør- og prisvalgene. Gemini Live-innstillingene åpnes fra knappen nederst; eksisterende motorvalg beholdes, og alle endringer lagres med «Lagre».
+
 
 ## Widgets
 

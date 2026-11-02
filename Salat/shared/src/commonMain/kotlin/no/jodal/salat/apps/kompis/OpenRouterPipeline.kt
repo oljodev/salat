@@ -274,6 +274,7 @@ class OpenRouterPipeline(
         val body = LlmRequest.body(
             modelId = settings.llmModel,
             providers = settings.llmProviders,
+            routing = settings.llmRouting,
             model = ModelCache.llm.firstOrNull { it.id == settings.llmModel },
             prompt = VoicePrompt.build(settings.personality, now()),
             messages = turns.takeLast(MaxHistory),

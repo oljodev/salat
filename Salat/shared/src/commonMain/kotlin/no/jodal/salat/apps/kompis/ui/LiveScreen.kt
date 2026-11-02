@@ -123,6 +123,7 @@ fun LiveScreen(
             TopBar(state, showTranscript, onMinimize = onMinimize, onToggleTranscript = onToggleTranscript)
             AnimatedMascot(
                 mode = mode,
+                status = if (state.muted) LiveStatus.Muted else state.status,
                 level = state.level,
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
