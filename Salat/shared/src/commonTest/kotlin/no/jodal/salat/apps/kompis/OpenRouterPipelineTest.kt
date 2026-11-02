@@ -18,6 +18,9 @@ import no.jodal.salat.FakeBridge
 private class RecordingHost : PipelineHost {
     val events = mutableListOf<String>()
     var timings: TurnTimings? = null
+    var info: MessageInfo? = null
+
+    override fun onMessageInfo(info: MessageInfo) { this.info = info }
 
     override fun onStatus(status: String) { events += "status $status" }
     override fun onLevel(level: Float) { events += "level" }
@@ -36,6 +39,39 @@ private class RecordingHost : PipelineHost {
 }
 
 class OpenRouterPipelineTest {
+    @Test
+    fun messageMetricsUseTokenTimeAndExcludeSpeechPlayback() {
+        openAndGoToListening()
+        say("Hei")
+        chat.onEvent("""{"model":"actual/model","provider":"Test","choices":[{"delta":{"tool_calls":[{"function":{"arguments":"{"}}]}}]}""", 100)
+        val arguments = JsonPrimitive("\"text\":\"Hei på deg. \"}")
+        chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"function":{"arguments":$arguments}}]}}]}""", 300)
+        chat.onEvent("""{"choices":[],"usage":{"prompt_tokens":200,"completion_tokens":101,"completion_tokens_details":{"reasoning_tokens":20},"cost":0.002}}""", 1100)
+        chat.onDone(1100)
+        clockMillis += 15_000
+        speech.onItemStarted("s0")
+        speech.onFinished()
+        val info = assertNotNull(host.info)
+        assertEquals("actual/model", info.model)
+        assertEquals("Test", info.stats?.provider)
+        assertEquals(80, info.stats?.tokensPerSecond)
+        assertEquals(100L, info.stats?.firstTokenMillis)
+        assertEquals(1100L, info.stats?.totalMillis)
+        assertEquals(200, info.stats?.promptTokens)
+        assertEquals(0.002, info.stats?.costUsd)
+        assertEquals(false, info.interrupted)
+        assertTrue(info.timings!!.totalMillis!! >= 15_000)
+
+        // Neste svar skal ikke arve forbruket eller TPS fra det forrige.
+        say("Igjen")
+        chunk("Hei igjen. ")
+        speech.onItemStarted("s0")
+        pipeline.talkStart()
+        val partial = assertNotNull(host.info)
+        assertTrue(partial.interrupted)
+        assertNull(partial.stats)
+    }
+
     private val bridge = FakeBridge
     private lateinit var store: KompisStore
     private lateinit var host: RecordingHost

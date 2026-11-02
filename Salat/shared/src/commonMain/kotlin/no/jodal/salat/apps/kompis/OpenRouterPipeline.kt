@@ -14,6 +14,7 @@ import no.jodal.salat.SpeechListener
 import no.jodal.salat.SttListener
 
 /** Hvor raskt en tur gikk. Tidene er fra man slapp knappen, om ikke noe annet står. */
+@kotlinx.serialization.Serializable
 data class TurnTimings(
     /** Tale til tekst: fra opptaket ble sendt til teksten kom. */
     val sttMillis: Long,
@@ -33,6 +34,8 @@ interface PipelineHost : LiveListener {
     fun onNotice(message: String)
 
     fun onTimings(timings: TurnTimings)
+
+    fun onMessageInfo(info: MessageInfo) {}
 }
 
 /**
@@ -81,6 +84,11 @@ class OpenRouterPipeline(
     private var sentenceMillis: Long? = null
     private var voiceMillis: Long? = null
     private var heardAfterMillis: Long? = null
+    private var sentModel = ""
+    private var provider: String? = null
+    private var firstTokenMillis: Long? = null
+    private var usage: kotlinx.serialization.json.JsonObject? = null
+    private var llmStats: LlmStats? = null
 
     private val settings get() = store.data.settings
     private val handsFree get() = settings.handsFree
@@ -100,6 +108,7 @@ class OpenRouterPipeline(
 
     fun stop() {
         if (phase == Phase.Closed) return
+        if (isAnswering) reportInfo(interrupted = true)
         phase = Phase.Closed
         bridge.openRouterCancelChat()
         bridge.speechStop()
@@ -256,6 +265,11 @@ class OpenRouterPipeline(
         sentenceMillis = null
         voiceMillis = null
         heardAfterMillis = null
+        sentModel = settings.llmModel
+        provider = null
+        firstTokenMillis = null
+        usage = null
+        llmStats = null
         chatSentAt = clock()
         val body = LlmRequest.body(
             modelId = settings.llmModel,
@@ -274,6 +288,13 @@ class OpenRouterPipeline(
             if (chunk.error != null) {
                 abort(chunk.error)
                 return
+            }
+            chunk.provider?.let { provider = it }
+            chunk.model?.let { sentModel = it }
+            chunk.usage?.let { usage = it }
+            // Tell første innhold/token, også JSON-argumenter før den talte teksten.
+            if (firstTokenMillis == null && (chunk.content.isNotEmpty() || chunk.toolArguments.isNotEmpty())) {
+                firstTokenMillis = millis
             }
             // Modellen svarer med verktøyet say: først hva den tror du sa, så språket, og så det som skal sies.
             val added = stream.add(chunk)
@@ -298,6 +319,18 @@ class OpenRouterPipeline(
             chatDone = true
             enqueue(buffer.toString())
             buffer.clear()
+            llmStats = LlmStats(
+                modelName = sentModel,
+                provider = provider,
+                firstTokenMillis = firstTokenMillis,
+                firstSentenceMillis = sentenceMillis,
+                totalMillis = millis,
+                promptTokens = usage?.int("prompt_tokens"),
+                cachedTokens = usage?.get("prompt_tokens_details")?.jsonObjectOrNull()?.int("cached_tokens"),
+                completionTokens = usage?.int("completion_tokens"),
+                reasoningTokens = usage?.get("completion_tokens_details")?.jsonObjectOrNull()?.int("reasoning_tokens"),
+                costUsd = (usage?.get("cost") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull(),
+            )
             if (sentences.isEmpty()) {
                 backToListening("Kompis ga ikke noe svar.")
             } else {
@@ -375,6 +408,7 @@ class OpenRouterPipeline(
 
         override fun onFinished() {
             if (!isAnswering) return
+            reportInfo(interrupted = false)
             turns += Role.Kompis to sentences.joinToString(" ")
             phase = Phase.Idle
             voice.reset()
@@ -394,10 +428,21 @@ class OpenRouterPipeline(
 
     private fun timings() = TurnTimings(sttMillis, sentenceMillis, voiceMillis, heardAfterMillis)
 
+    private fun reportInfo(interrupted: Boolean) {
+        host.onMessageInfo(MessageInfo(
+            engine = "OpenRouter",
+            model = sentModel,
+            stats = llmStats,
+            timings = timings().copy(totalMillis = clock() - releasedAt),
+            interrupted = interrupted,
+        ))
+    }
+
     // Avbrudd og feil.
 
     /** Stopper svaret midt i. Det som er sagt så langt, blir med i samtalen. */
     private fun interrupt() {
+        reportInfo(interrupted = true)
         bridge.openRouterCancelChat()
         bridge.speechStop()
         keepWhatWasSaid()
@@ -407,6 +452,7 @@ class OpenRouterPipeline(
 
     /** Noe gikk galt midt i svaret. Det som er sagt, blir stående, og samtalen fortsetter. */
     private fun abort(message: String) {
+        reportInfo(interrupted = true)
         bridge.openRouterCancelChat()
         bridge.speechStop()
         keepWhatWasSaid()

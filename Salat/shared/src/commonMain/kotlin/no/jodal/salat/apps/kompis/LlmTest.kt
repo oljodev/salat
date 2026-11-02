@@ -17,6 +17,7 @@ import no.jodal.salat.NativeBridge
 data class LlmMessage(val role: Role, val text: String, val stats: LlmStats? = null)
 
 /** Hvor raskt et svar kom. Tidene er fra forespørselen ble sendt. */
+@kotlinx.serialization.Serializable
 data class LlmStats(
     val modelName: String,
     val provider: String?,
@@ -34,12 +35,12 @@ data class LlmStats(
     /** Språket modellen svarte på. */
     val language: String? = null,
 ) {
-    /** Hvor mange tokens i sekundet som kom etter det første. */
+    /** Omtrentlig fart etter første token, uten tokens brukt til intern tenking. */
     val tokensPerSecond: Int?
         get() {
-            val tokens = completionTokens ?: return null
+            val tokens = (completionTokens ?: return null) - (reasoningTokens ?: 0)
             val seconds = (totalMillis - (firstTokenMillis ?: return null)) / 1000.0
-            return if (seconds > 0.05 && tokens > 1) (tokens / seconds).toInt() else null
+            return if (seconds > 0.05 && tokens > 1) ((tokens - 1) / seconds).toInt() else null
         }
 }
 

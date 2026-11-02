@@ -17,6 +17,8 @@ Forsiden har to deler: **Appene dine** og **Verktøy**.
 | Fornyelse | Verktøy | Viser hvor lenge det er til appen må fornyes i SideStore. Salat varsler også dagen før. |
 | Varseltest | Verktøy | Sender testvarsler og testalarmer, så du kan sjekke at varsler, alarmer og lyd virker. |
 
+I Kompis kan du holde inne på en melding og velge **Vis meldingsinfo**. Nye svar gjennom OpenRouter lagrer modell, leverandør, omtrentlig TPS, latency, tokenforbruk og LLM-kostnad når tallene finnes. Talegjenkjenning og tid til lyd vises separat. Eldre meldinger har ikke målinger, og Gemini Live viser foreløpig bare modellnavnet.
+
 ## Widgets
 
 Widgetene ligger i én widget-utvidelse (`iosApp/SalatWidgets`), så de bare bruker én App-ID i SideStore. Hver widget har samme stil som mini-appen den hører til.

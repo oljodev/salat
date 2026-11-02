@@ -30,6 +30,7 @@ internal data class ChatChunk(
     val usage: JsonObject?,
     /** Feilen OpenRouter ga midt i svaret, eller `null`. */
     val error: String?,
+    val model: String? = null,
 )
 
 private val chatJson = Json { ignoreUnknownKeys = true }
@@ -46,7 +47,7 @@ internal fun parseChatChunk(dataJson: String): ChatChunk? {
     val toolArguments = (delta?.get("tool_calls") as? JsonArray)
         ?.joinToString("") { it.jsonObjectOrNull()?.get("function")?.jsonObjectOrNull()?.string("arguments").orEmpty() }
         .orEmpty()
-    return ChatChunk(content, toolArguments, event.string("provider"), event["usage"]?.jsonObjectOrNull(), error)
+    return ChatChunk(content, toolArguments, event.string("provider"), event["usage"]?.jsonObjectOrNull(), error, event.string("model"))
 }
 
 internal fun JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject

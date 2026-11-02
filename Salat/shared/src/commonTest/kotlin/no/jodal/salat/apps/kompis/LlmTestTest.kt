@@ -78,7 +78,7 @@ class LlmTestTest {
         assertEquals(361L, stats.totalMillis)
         assertEquals(1024, stats.cachedTokens)
         assertEquals(0.00002, stats.costUsd)
-        assertEquals(solidRate(11, 361 - 240), stats.tokensPerSecond)
+        assertEquals(solidRate(10, 361 - 240), stats.tokensPerSecond)
     }
 
     private fun solidRate(tokens: Int, millis: Long) = (tokens / (millis / 1000.0)).toInt()

@@ -166,7 +166,7 @@ fun ConversationScreen(
                         )
                     }
                 }
-                items(conversation.messages) { ChatMessage(it.role, it.text, dark = false) }
+                items(conversation.messages) { ChatMessage(it.role, it.text, dark = false, info = it.info) }
             }
         }
 

@@ -26,6 +26,17 @@ data class Message(
     val role: Role,
     val text: String,
     val atMillis: Long,
+    val info: MessageInfo? = null,
+)
+
+/** Målingene til akkurat dette svaret, lagret sammen med meldingen. */
+@Serializable
+data class MessageInfo(
+    val engine: String,
+    val model: String,
+    val stats: LlmStats? = null,
+    val timings: TurnTimings? = null,
+    val interrupted: Boolean = false,
 )
 
 @Serializable

@@ -137,7 +137,9 @@ fun LlmTestScreen(store: KompisStore, bridge: NativeBridge, onBack: () -> Unit, 
             test.messages.forEachIndexed { index, message ->
                 item(key = "message-$index") {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ChatMessage(message.role, message.text, dark = false)
+                        ChatMessage(message.role, message.text, dark = false, info = message.stats?.let {
+                            no.jodal.salat.apps.kompis.MessageInfo("OpenRouter", it.modelName, stats = it)
+                        })
                         message.stats?.let { StatsLine(it) }
                     }
                 }

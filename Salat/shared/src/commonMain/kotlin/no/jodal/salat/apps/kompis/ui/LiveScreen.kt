@@ -275,7 +275,7 @@ private fun Transcript(state: LiveUiState) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(state.messages) { ChatMessage(it.role, it.text, dark = true) }
+        items(state.messages) { ChatMessage(it.role, it.text, dark = true, info = it.info) }
         state.userDraft?.let { item { ChatMessage(Role.User, it, dark = true, draft = true) } }
         state.kompisDraft?.let { item { ChatMessage(Role.Kompis, it, dark = true, draft = true) } }
         state.debug?.let {
@@ -380,7 +380,7 @@ private fun GlassButton(icon: ImageVector, description: String, selected: Boolea
  * tekst, som i en moderne chat. Brukes både på samtaleskjermen ([dark]) og i samtalehistorikken.
  */
 @Composable
-fun ChatMessage(role: Role, text: String, dark: Boolean, draft: Boolean = false) {
+internal fun ChatMessageBody(role: Role, text: String, dark: Boolean, draft: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     val alpha = if (draft) 0.55f else 1f
     if (role == Role.User) {

@@ -12,6 +12,33 @@ import no.jodal.salat.FakeBridge
 import no.jodal.salat.apps.kompis.ui.LiveStatus
 
 class KompisLiveTest {
+    @Test
+    fun metricsStayWithTheirMessageAndSurviveSerialization() {
+        live.start(null)
+        live.onUserText("Hei")
+        live.onKompisText("Hallo")
+        val info = MessageInfo("OpenRouter", "test/model", timings = TurnTimings(123, 456, 78, 900))
+        live.onMessageInfo(info)
+        live.onTurnComplete()
+        live.onUserText("En gang til")
+        live.onKompisText("Hei igjen")
+        live.onTurnComplete()
+        val data = Json.decodeFromString(KompisData.serializer(), Json.encodeToString(KompisData.serializer(), store.data))
+        val messages = data.conversations.single().messages
+        assertNull(messages[0].info)
+        assertEquals(info, messages[1].info)
+        assertEquals(LiveModel, messages[3].info?.model)
+        assertNull(messages[3].info?.timings)
+        live.end()
+    }
+
+    @Test
+    fun oldMessagesWithoutMetricsStillLoad() {
+        val message = Json.decodeFromString(Message.serializer(), """{"role":"kompis","text":"Hei","atMillis":123}""")
+        assertEquals("Hei", message.text)
+        assertNull(message.info)
+    }
+
     // KompisStore og KompisLive finnes bare én gang, så alle testene må bruke samme bro.
     private val bridge = FakeBridge
     private lateinit var store: KompisStore

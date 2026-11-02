@@ -54,6 +54,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
 
     /** Samtalen gjennom OpenRouter som pågår, eller `null` når den er med Gemini Live. */
     private var pipeline: OpenRouterPipeline? = null
+    private var messageInfo: MessageInfo? = null
 
     /** Starter en ny samtale, eller fortsetter [continuing]. */
     fun start(continuing: Conversation?) {
@@ -68,6 +69,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
         val engine = store.engine
         val hasKey = store.hasKeyFor(engine)
         pipeline = null
+        messageInfo = null
         conversationId = conversation.id
         startedAtMillis = now
         turnsSinceRoll = 0
@@ -211,6 +213,10 @@ class KompisLive private constructor(private val store: KompisStore, private val
         state = state.copy(timings = timings)
     }
 
+    override fun onMessageInfo(info: MessageInfo) {
+        messageInfo = info
+    }
+
     override fun onError(message: String) {
         stopPipeline()
         finishTurn()
@@ -225,6 +231,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
         state.userDraft?.let { addMessage(Role.User, it) }
         state.kompisDraft?.let { addMessage(Role.Kompis, it) }
         state = state.copy(userDraft = null, kompisDraft = null)
+        messageInfo = null
     }
 
     private fun addMessage(role: Role, text: String) {
@@ -232,7 +239,10 @@ class KompisLive private constructor(private val store: KompisStore, private val
         if (trimmed.isEmpty()) {
             return
         }
-        val message = Message(role, trimmed, store.nowMillis())
+        val info = if (role == Role.Kompis) {
+            messageInfo ?: if (!state.pushToTalk) MessageInfo("Gemini Live", LiveModel) else null
+        } else null
+        val message = Message(role, trimmed, store.nowMillis(), info)
         state = state.copy(messages = state.messages + message)
         val id = conversationId ?: return
         val existing = store.conversation(id)
