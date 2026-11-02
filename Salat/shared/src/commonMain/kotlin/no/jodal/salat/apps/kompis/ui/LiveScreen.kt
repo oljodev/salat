@@ -121,6 +121,14 @@ fun LiveScreen(
         )
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             TopBar(state, showTranscript, onMinimize = onMinimize, onToggleTranscript = onToggleTranscript)
+            AnimatedMascot(
+                mode = mode,
+                level = state.level,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 8.dp, bottom = 4.dp)
+                    .size(if (showTranscript) 56.dp else 104.dp),
+            )
             AnimatedContent(
                 targetState = showTranscript,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },

@@ -55,13 +55,11 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.rounded.Tune
 import no.jodal.salat.resources.Res
 import org.jetbrains.compose.resources.DrawableResource
-import org.jetbrains.compose.resources.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -322,15 +320,12 @@ private fun Title(mascot: DrawableResource) {
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.padding(top = 12.dp),
     ) {
-        Image(
-            painterResource(mascot),
-            contentDescription = null,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.surfaceVariant)
-                .padding(5.dp),
-        )
+        Box(
+            Modifier.size(56.dp).clip(RoundedCornerShape(16.dp))
+                .background(colors.surfaceVariant).padding(5.dp),
+        ) {
+            AnimatedMascot(mascot = mascot, modifier = Modifier.fillMaxSize())
+        }
         Column {
             Text("Kompis", style = MaterialTheme.typography.displaySmall, color = colors.onBackground)
             Text(

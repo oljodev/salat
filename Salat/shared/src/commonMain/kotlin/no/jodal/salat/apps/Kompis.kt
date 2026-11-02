@@ -11,7 +11,6 @@ val Kompis = MiniApp(
     description = "Snakk med en AI, med stemmen",
     icon = MiniAppIcon.Logo(KompisMascots.current),
     color = KompisPalette.Night,
-    solidTile = true,
     customTopBar = true,
     content = { KompisScreen(it.bridge, onBack = it.onBack) },
 )
