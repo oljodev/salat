@@ -43,9 +43,9 @@ class OpenRouterPipelineTest {
     fun messageMetricsUseTokenTimeAndExcludeSpeechPlayback() {
         openAndGoToListening()
         say("Hei")
-        chat.onEvent("""{"model":"actual/model","provider":"Test","choices":[{"delta":{"tool_calls":[{"function":{"arguments":"{"}}]}}]}""", 100)
+        chat.onEvent("""{"model":"actual/model","provider":"Test","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"say","arguments":"{"}}]}}]}""", 100)
         val arguments = JsonPrimitive("\"text\":\"Hei på deg. \"}")
-        chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"function":{"arguments":$arguments}}]}}]}""", 300)
+        chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"say","arguments":$arguments}}]}}]}""", 300)
         chat.onEvent("""{"choices":[],"usage":{"prompt_tokens":200,"completion_tokens":101,"completion_tokens_details":{"reasoning_tokens":20},"cost":0.002}}""", 1100)
         chat.onDone(1100)
         clockMillis += 15_000
@@ -214,7 +214,7 @@ class OpenRouterPipelineTest {
             listOf("Hei", "Hei på deg!", "Hvordan går det?", "Bare bra. Og med deg?", "Fint"),
             messages.drop(1).map { it["content"]!!.jsonPrimitive.content },
         )
-        assertTrue(messages[0]["content"]!!.jsonPrimitive.content.endsWith("Det er søndag 25. oktober 2026, og klokka er 14:32."))
+        assertTrue("Det er søndag 25. oktober 2026, og klokka er 14:32." in messages[0]["content"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -381,8 +381,68 @@ class OpenRouterPipelineTest {
         assertTrue("user Hej" in host.events)
     }
 
+    @Test
+    fun successfulToolResultIsSentBackBeforeSay() {
+        val tool = object : no.jodal.salat.apps.kompis.tools.KompisTool by no.jodal.salat.apps.kompis.tools.SayTool {
+            override val name = "test_action"
+            override suspend fun execute(args: kotlinx.serialization.json.JsonObject): no.jodal.salat.apps.kompis.tools.ToolResult {
+                assertEquals("06:30", args["time"]!!.jsonPrimitive.content)
+                return no.jodal.salat.apps.kompis.tools.ToolResult("Opprettet")
+            }
+        }
+        pipeline = OpenRouterPipeline(store, bridge, host, clock = { clockMillis }, tools = no.jodal.salat.apps.kompis.tools.KompisTools(listOf(no.jodal.salat.apps.kompis.tools.SayTool, tool)))
+        openAndGoToListening()
+        say("Sett alarm")
+        chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"action1","function":{"name":"test_action","arguments":"{\"time\":\"06:30\"}"}}]}}]}""", 100)
+        chat.onDone(200)
+        val messages = lastRequest()["messages"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("action1", messages[messages.lastIndex - 1]["tool_calls"]!!.jsonArray.single().jsonObject["id"]!!.jsonPrimitive.content)
+        assertEquals("action1", messages.last()["tool_call_id"]!!.jsonPrimitive.content)
+        assertTrue("Opprettet" in messages.last()["content"]!!.jsonPrimitive.content)
+        toolEvent("""{"text":"Alarmen er satt."}""")
+        chat.onDone(200)
+        assertEquals("Alarmen er satt.", spokenInput("s0"))
+    }
+
+    @Test
+    fun malformedArgumentsAreReturnedAsAnError() {
+        openAndGoToListening()
+        say("Hei")
+        chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"bad","function":{"name":"rise_list","arguments":"{"}}]}}]}""", 100)
+        chat.onDone(200)
+        val result = lastRequest()["messages"]!!.jsonArray.last().jsonObject["content"]!!.jsonPrimitive.content
+        assertTrue(Json.parseToJsonElement(result).jsonObject["isError"]!!.jsonPrimitive.content == "true")
+    }
+
+    @Test
+    fun unknownToolReturnsAnErrorAndRequestsAnotherRound() {
+        openAndGoToListening()
+        say("Hei")
+        val original = chat
+        chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call1","function":{"name":"unknown","arguments":"{}"}}]}}]}""", 100)
+        chat.onDone(200)
+        assertTrue(original !== chat)
+        val messages = lastRequest()["messages"]!!.jsonArray
+        assertEquals("tool", messages.last().jsonObject["role"]!!.jsonPrimitive.content)
+        assertTrue(messages.last().jsonObject["content"]!!.jsonPrimitive.content.contains("Ukjent verktøy"))
+        toolEvent("""{"text":"Prøv igjen."}""")
+        chat.onDone(200)
+        assertTrue(bridge.speechBodies.isNotEmpty())
+    }
+
+    @Test
+    fun stopsAfterFourToolRounds() {
+        openAndGoToListening()
+        say("Hei")
+        repeat(4) {
+            chat.onEvent("""{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"x","function":{"name":"unknown","arguments":"{}"}}]}}]}""", 100)
+            chat.onDone(200)
+        }
+        assertTrue(spokenInput("s0").contains("fire forsøk"))
+    }
+
     private fun toolEvent(arguments: String) = chat.onEvent(
-        """{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":${JsonPrimitive(arguments)}}}]}}]}""",
+        """{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"say","arguments":${JsonPrimitive(arguments)}}}]}}]}""",
         300,
     )
 
@@ -393,7 +453,7 @@ class OpenRouterPipelineTest {
         openAndGoToListening()
         say("Tusen tack")
         val request = lastRequest()
-        assertEquals("say", request["tool_choice"]!!.jsonObject["function"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("required", request["tool_choice"]!!.jsonPrimitive.content)
 
         toolEvent("""{"understood":"Tusen takk","language":"no",""")
         assertTrue("debug Forstod: Tusen takk  (hørt som: Tusen tack)" in host.events)
@@ -504,7 +564,8 @@ class OpenRouterPipelineTest {
         handsFree()
         levels(0.05f, 600)
         levels(0.7f, 600)
-        levels(0.05f, 900)
+        // Med nivåer hvert 60. ms sendes opptaket etter 780 ms stillhet.
+        levels(0.05f, 780)
         stt.onTranscribed("""{"text":"Hei"}""", 2.0, 64_000, 210)
         chunk("Hei!")
         chat.onDone(500)

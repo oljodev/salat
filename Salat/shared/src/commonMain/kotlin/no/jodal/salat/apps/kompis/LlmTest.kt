@@ -188,7 +188,7 @@ class LlmTest(
         routing = store.data.settings.llmRouting,
         model = models.firstOrNull { it.id == modelId },
         prompt = prompt(),
-        messages = messages.map { it.role to it.text },
+        messages = messages.map { Message(it.role, it.text, 0) },
     )
 
     // ChatListener, kalles fra Swift.

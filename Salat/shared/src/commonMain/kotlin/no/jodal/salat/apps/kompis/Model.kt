@@ -28,6 +28,9 @@ data class Message(
     val text: String,
     val atMillis: Long,
     val info: MessageInfo? = null,
+    val toolCalls: List<ToolCall> = emptyList(),
+    val toolCallId: String? = null,
+    val card: no.jodal.salat.apps.kompis.tools.ToolCard? = null,
 )
 
 /** Målingene til akkurat dette svaret, lagret sammen med meldingen. */
@@ -38,12 +41,17 @@ data class MessageInfo(
     val stats: LlmStats? = null,
     val timings: TurnTimings? = null,
     val interrupted: Boolean = false,
+    val tools: List<ToolRecord> = emptyList(),
 )
+
+@Serializable
+data class ToolRecord(val name: String, val arguments: String, val result: String, val isError: Boolean)
 
 @Serializable
 enum class Role {
     @SerialName("user") User,
     @SerialName("kompis") Kompis,
+    @SerialName("tool") Tool,
 }
 
 /** Hva som står for samtalen: Gemini Live alene, eller tale til tekst, en språkmodell og tekst til tale hver for seg. */

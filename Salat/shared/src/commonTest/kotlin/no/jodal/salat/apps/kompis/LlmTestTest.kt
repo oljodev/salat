@@ -47,7 +47,7 @@ class LlmTestTest {
 
         val messages = body["messages"]!!.jsonArray.map { it.jsonObject }
         assertEquals(listOf("system", "user"), messages.map { it["role"]!!.jsonPrimitive.content })
-        assertTrue(messages[0]["content"]!!.jsonPrimitive.content.endsWith("Det er søndag 25. oktober 2026, og klokka er 14:32."))
+        assertTrue("Det er søndag 25. oktober 2026, og klokka er 14:32." in messages[0]["content"]!!.jsonPrimitive.content)
         assertEquals("Hei", messages[1]["content"]!!.jsonPrimitive.content)
     }
 
@@ -84,7 +84,7 @@ class LlmTestTest {
     private fun solidRate(tokens: Int, millis: Long) = (tokens / (millis / 1000.0)).toInt()
 
     private fun toolEvent(arguments: String, millis: Long) = test.onEvent(
-        """{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":${JsonPrimitive(arguments)}}}]}}]}""",
+        """{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"say","arguments":${JsonPrimitive(arguments)}}}]}}]}""",
         millis,
     )
 
@@ -92,7 +92,7 @@ class LlmTestTest {
     fun asksForTheSayToolFirstWritingWhatItUnderstood() {
         test.send("Tusen tack")
         val body = sentBody()
-        assertEquals("""{"type":"function","function":{"name":"say"}}""", body["tool_choice"].toString())
+        assertEquals("\"required\"", body["tool_choice"].toString())
         val tool = body["tools"]!!.jsonArray.single().jsonObject["function"]!!.jsonObject
         assertEquals("say", tool["name"]!!.jsonPrimitive.content)
         val parameters = tool["parameters"]!!.jsonObject

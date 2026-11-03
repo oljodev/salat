@@ -7,9 +7,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SayTest {
-    private fun args(fragment: String) = ChatChunk(content = "", toolArguments = fragment, provider = null, usage = null, error = null)
+    private fun args(fragment: String) = ChatChunk(content = "", toolCalls = listOf(ToolCallDelta(0, name = "say", argumentsDelta = fragment)), provider = null, usage = null, error = null)
 
-    private fun plain(text: String) = ChatChunk(content = text, toolArguments = "", provider = null, usage = null, error = null)
+    private fun plain(text: String) = ChatChunk(content = text, toolCalls = emptyList(), provider = null, usage = null, error = null)
 
     @Test
     fun readsTextFieldsWhileTheyAreWritten() {

@@ -109,6 +109,8 @@ internal object PartialJson {
  */
 internal class SayStream {
     private val arguments = StringBuilder()
+    private val calls = ToolCallAssembler()
+    private var sayIndex: Int? = null
 
     /** Modellen svarte med verktøyet. */
     var usedTool = false
@@ -128,11 +130,18 @@ internal class SayStream {
 
     /** Legger til en hendelse. Gir den nye teksten som skal sies, eller tom tekst. */
     fun add(chunk: ChatChunk): String {
-        if (chunk.toolArguments.isNotEmpty()) {
+        calls.add(chunk.toolCalls)
+        if (sayIndex == null) {
+            sayIndex = chunk.toolCalls.firstOrNull { calls.at(it.index)?.name == "say" }?.index
+        }
+        val say = sayIndex?.let { calls.at(it) }
+        if (say != null) {
             usedTool = true
-            arguments.append(chunk.toolArguments)
+            arguments.clear()
+            arguments.append(say.arguments)
             return readTool()
         }
+        if (chunk.toolCalls.isNotEmpty()) return ""
         // Vanlig tekst, for modeller som ikke bruker verktøy. Kommer verktøyet, brukes bare det.
         if (chunk.content.isEmpty() || usedTool) return ""
         text += chunk.content

@@ -160,6 +160,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
             "listening" -> if (state.muted) LiveStatus.Muted else LiveStatus.Listening
             "recording" -> LiveStatus.Recording
             "thinking" -> LiveStatus.Thinking
+            "working" -> LiveStatus.Working
             "speaking" -> LiveStatus.Speaking
             "reconnecting" -> LiveStatus.Reconnecting
             "ended" -> LiveStatus.Ended
@@ -211,6 +212,16 @@ class KompisLive private constructor(private val store: KompisStore, private val
 
     override fun onTimings(timings: TurnTimings) {
         state = state.copy(timings = timings)
+    }
+
+    override fun onToolCard(card: no.jodal.salat.apps.kompis.tools.ToolCard) {
+        state.userDraft?.let { addMessage(Role.User, it) }
+        state = state.copy(userDraft = null)
+        val message = Message(Role.Kompis, "", store.nowMillis(), card = card)
+        state = state.copy(messages = state.messages + message)
+        val id = conversationId ?: return
+        val existing = store.conversation(id) ?: Conversation(id, state.title, startedAtMillis, startedAtMillis)
+        save(existing.copy(messages = existing.messages + message, updatedAtMillis = message.atMillis))
     }
 
     override fun onMessageInfo(info: MessageInfo) {
@@ -279,7 +290,7 @@ class KompisLive private constructor(private val store: KompisStore, private val
 
         private val historySerializer = kotlinx.serialization.builtins.ListSerializer(HistoryTurn.serializer())
 
-        private fun history(messages: List<Message>): List<HistoryTurn> = messages.takeLast(MaxHistory).map {
+        private fun history(messages: List<Message>): List<HistoryTurn> = messages.filter { it.text.isNotBlank() }.takeLast(MaxHistory).map {
             HistoryTurn(role = if (it.role == Role.User) "user" else "model", text = it.text)
         }
         private val json = Json { encodeDefaults = true }

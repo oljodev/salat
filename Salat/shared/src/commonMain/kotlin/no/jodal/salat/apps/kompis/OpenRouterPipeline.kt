@@ -1,5 +1,8 @@
 package no.jodal.salat.apps.kompis
 
+import kotlinx.coroutines.*
+import no.jodal.salat.apps.kompis.tools.*
+import kotlinx.serialization.json.JsonObject
 import kotlin.time.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -36,6 +39,7 @@ interface PipelineHost : LiveListener {
     fun onTimings(timings: TurnTimings)
 
     fun onMessageInfo(info: MessageInfo) {}
+    fun onToolCard(card: ToolCard) {}
 }
 
 /**
@@ -50,6 +54,8 @@ class OpenRouterPipeline(
     private val host: PipelineHost,
     private val now: () -> LocalDateTime = { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()) },
     private val clock: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val tools: KompisTools = KompisTools(listOf(SayTool) + RiseTools(bridge).all),
+    private val toolScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     private enum class Phase { Opening, Idle, Recording, Transcribing, Thinking, Speaking, Closed }
 
@@ -65,10 +71,16 @@ class OpenRouterPipeline(
     private var echoCancelled = true
 
     /** Samtalen så langt, som språkmodellen får den. */
-    private val turns = mutableListOf<Pair<Role, String>>()
+    private val turns = mutableListOf<Message>()
 
     // Svaret som kommer nå. [buffer] er det som skal sies, men ikke er en hel setning ennå.
     private var stream = SayStream()
+    private var calls = ToolCallAssembler()
+    private var round = 0
+    private var requestId = 0
+    private var toolJob: Job? = null
+    private var totalLlmMillis = 0L
+    private val toolRecords = mutableListOf<ToolRecord>()
     private var understoodHandled = false
     private val buffer = StringBuilder()
     private val sentences = mutableListOf<String>()
@@ -98,7 +110,7 @@ class OpenRouterPipeline(
 
     fun start(history: List<Message>) {
         turns.clear()
-        turns += history.takeLast(MaxHistory).map { it.role to it.text }
+        turns += history.filter { it.text.isNotBlank() || it.toolCalls.isNotEmpty() || it.role == Role.Tool }.takeLast(MaxHistory)
         phase = Phase.Opening
         host.onStatus("connecting")
         bridge.kompisConversationOpen(stt)
@@ -110,6 +122,8 @@ class OpenRouterPipeline(
         if (phase == Phase.Closed) return
         if (isAnswering) reportInfo(interrupted = true)
         phase = Phase.Closed
+        requestId++
+        toolJob?.cancel()
         bridge.openRouterCancelChat()
         bridge.speechStop()
         bridge.kompisConversationClose()
@@ -217,7 +231,7 @@ class OpenRouterPipeline(
                 text.isEmpty() -> backToListening(if (handsFree) null else "Hørte ikke noe. Prøv igjen.")
                 else -> {
                     host.onUserText(text)
-                    turns += Role.User to text
+                    turns += Message(Role.User, text, clock())
                     answer()
                 }
             }
@@ -271,15 +285,35 @@ class OpenRouterPipeline(
         usage = null
         llmStats = null
         chatSentAt = clock()
+        round = 0
+        toolRecords.clear()
+        totalLlmMillis = 0
+        requestRound()
+    }
+
+    private fun requestRound() {
+        round++
+        stream = SayStream()
+        calls = ToolCallAssembler()
+        usage = null
+        chatDone = false
+        val id = ++requestId
         val body = LlmRequest.body(
             modelId = settings.llmModel,
             providers = settings.llmProviders,
             routing = settings.llmRouting,
             model = ModelCache.llm.firstOrNull { it.id == settings.llmModel },
-            prompt = VoicePrompt.build(settings.personality, now()),
-            messages = turns.takeLast(MaxHistory),
+            prompt = VoicePrompt.build(settings.personality, now(), tools.all),
+            // Trim only at user boundaries: tool results must retain their assistant calls.
+            messages = requestHistory(),
+            tools = tools.all,
         )
-        bridge.openRouterChat(store.openRouterKey, body, chat)
+        // Every follow-up uses the native request path, including its pre-stream retry policy.
+        bridge.openRouterChat(store.openRouterKey, body, object : ChatListener {
+            override fun onEvent(dataJson: String, millis: Long) { if (id == requestId) chat.onEvent(dataJson, millis) }
+            override fun onDone(millis: Long) { if (id == requestId) chat.onDone(millis) }
+            override fun onError(message: String) { if (id == requestId) chat.onError(message) }
+        })
     }
 
     private val chat = object : ChatListener {
@@ -294,10 +328,11 @@ class OpenRouterPipeline(
             chunk.model?.let { sentModel = it }
             chunk.usage?.let { usage = it }
             // Tell første innhold/token, også JSON-argumenter før den talte teksten.
-            if (firstTokenMillis == null && (chunk.content.isNotEmpty() || chunk.toolArguments.isNotEmpty())) {
-                firstTokenMillis = millis
+            if (firstTokenMillis == null && (chunk.content.isNotEmpty() || chunk.toolCalls.isNotEmpty())) {
+                firstTokenMillis = totalLlmMillis + millis
             }
             // Modellen svarer med verktøyet say: først hva den tror du sa, så språket, og så det som skal sies.
+            calls.add(chunk.toolCalls)
             val added = stream.add(chunk)
             useUnderstood()
             if (added.isEmpty()) return
@@ -318,20 +353,40 @@ class OpenRouterPipeline(
         override fun onDone(millis: Long) {
             if (!isAnswering || chatDone) return
             chatDone = true
-            enqueue(buffer.toString())
-            buffer.clear()
+            val previous = llmStats
+            totalLlmMillis += millis
             llmStats = LlmStats(
                 modelName = sentModel,
                 provider = provider,
                 firstTokenMillis = firstTokenMillis,
                 firstSentenceMillis = sentenceMillis,
-                totalMillis = millis,
+                totalMillis = totalLlmMillis,
                 promptTokens = usage?.int("prompt_tokens"),
                 cachedTokens = usage?.get("prompt_tokens_details")?.jsonObjectOrNull()?.int("cached_tokens"),
                 completionTokens = usage?.int("completion_tokens"),
                 reasoningTokens = usage?.get("completion_tokens_details")?.jsonObjectOrNull()?.int("reasoning_tokens"),
                 costUsd = (usage?.get("cost") as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull(),
             )
+            llmStats = llmStats!!.let { current -> current.copy(
+                promptTokens = sum(previous?.promptTokens, current.promptTokens),
+                cachedTokens = sum(previous?.cachedTokens, current.cachedTokens),
+                completionTokens = sum(previous?.completionTokens, current.completionTokens),
+                reasoningTokens = sum(previous?.reasoningTokens, current.reasoningTokens),
+                costUsd = if (previous?.costUsd == null && current.costUsd == null) null else (previous?.costUsd ?: 0.0) + (current.costUsd ?: 0.0),
+            ) }
+            val completed = calls.all
+            if (completed.any { it.name != "say" } || (completed.isNotEmpty() && completed.none { it.name == "say" })) {
+                // Disallow mixed speech/actions: never execute after a confirmation has started playing.
+                if (completed.any { it.name == "say" }) {
+                    abort("Kompis blandet tale og handling i samme svar. Prøv igjen.")
+                    return
+                }
+                executeCalls(completed)
+                return
+            }
+            enqueue(buffer.toString())
+            buffer.clear()
+            llmStats = llmStats?.copy(firstSentenceMillis = sentenceMillis)
             if (sentences.isEmpty()) {
                 backToListening("Kompis ga ikke noe svar.")
             } else {
@@ -341,6 +396,56 @@ class OpenRouterPipeline(
 
         override fun onError(message: String) {
             if (isAnswering) abort(message)
+        }
+    }
+
+    private fun completeInterruptedCalls() {
+        val assistantIndex = turns.indexOfLast { it.toolCalls.isNotEmpty() }
+        if (assistantIndex < 0) return
+        val calls = turns[assistantIndex].toolCalls
+        val answered = turns.drop(assistantIndex + 1).mapNotNull { it.toolCallId }.toSet()
+        calls.filterNot { it.id in answered }.forEach {
+            turns += Message(Role.Tool, "Avbrutt. Handlingen kan ha blitt lagret; undersøk gjeldende tilstand.", clock(), toolCallId = it.id)
+        }
+    }
+
+    private fun requestHistory(): List<Message> {
+        val cutoff = (turns.size - MaxHistory).coerceAtLeast(0)
+        val start = (cutoff downTo 0).firstOrNull { turns[it].role == Role.User } ?: 0
+        return turns.drop(start)
+    }
+
+    private fun sum(a: Int?, b: Int?): Int? = if (a == null && b == null) null else (a ?: 0) + (b ?: 0)
+
+    private fun executeCalls(completed: List<ToolCall>) {
+        val id = requestId
+        host.onStatus("working")
+        toolJob = toolScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val normalized = completed.mapIndexed { index, call ->
+                call.copy(id = call.id.ifBlank { "call_${round}_$index" })
+            }
+            turns += Message(Role.Kompis, "", clock(), toolCalls = normalized)
+            for (call in normalized) {
+                val result = try {
+                    val tool = tools[call.name] ?: throw IllegalArgumentException("Ukjent verktøy: ${call.name}")
+                    val args = json.parseToJsonElement(call.arguments) as? JsonObject
+                        ?: throw IllegalArgumentException("Argumentene må være et JSON-objekt.")
+                    tool.execute(args)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    ToolResult(e.message ?: "Verktøyet feilet.", isError = true)
+                }
+                if (id != requestId || !isAnswering) return@launch
+                toolRecords += ToolRecord(call.name, call.arguments, result.content, result.isError)
+                result.card?.let(host::onToolCard)
+                val content = buildJsonObject { put("content", result.content); put("isError", result.isError) }.toString()
+                turns += Message(Role.Tool, content, clock(), toolCallId = call.id)
+            }
+            if (round >= MaxToolRounds) {
+                enqueue("Jeg klarte ikke å fullføre innen fire forsøk. Prøv igjen.")
+                bridge.speechFinish()
+            } else { host.onStatus("thinking"); requestRound() }
         }
     }
 
@@ -354,10 +459,10 @@ class OpenRouterPipeline(
         val understood = stream.understood ?: return
         if (understoodHandled) return
         understoodHandled = true
-        val index = turns.indexOfLast { it.first == Role.User }
-        if (index < 0 || turns[index].second == understood) return
-        host.onDebug("Forstod: $understood  (hørt som: ${turns[index].second})")
-        turns[index] = Role.User to understood
+        val index = turns.indexOfLast { it.role == Role.User }
+        if (index < 0 || turns[index].text == understood) return
+        host.onDebug("Forstod: $understood  (hørt som: ${turns[index].text})")
+        turns[index] = turns[index].copy(text = understood)
     }
 
     /** Sender [raw] til stemmen, hvis det er noe å lese. */
@@ -410,7 +515,7 @@ class OpenRouterPipeline(
         override fun onFinished() {
             if (!isAnswering) return
             reportInfo(interrupted = false)
-            turns += Role.Kompis to sentences.joinToString(" ")
+            turns += Message(Role.Kompis, sentences.joinToString(" "), clock())
             phase = Phase.Idle
             voice.reset()
             host.onTurnComplete()
@@ -436,6 +541,7 @@ class OpenRouterPipeline(
             stats = llmStats,
             timings = timings().copy(totalMillis = clock() - releasedAt),
             interrupted = interrupted,
+            tools = toolRecords.toList(),
         ))
     }
 
@@ -443,6 +549,9 @@ class OpenRouterPipeline(
 
     /** Stopper svaret midt i. Det som er sagt så langt, blir med i samtalen. */
     private fun interrupt() {
+        requestId++
+        toolJob?.cancel()
+        completeInterruptedCalls()
         reportInfo(interrupted = true)
         bridge.openRouterCancelChat()
         bridge.speechStop()
@@ -453,6 +562,9 @@ class OpenRouterPipeline(
 
     /** Noe gikk galt midt i svaret. Det som er sagt, blir stående, og samtalen fortsetter. */
     private fun abort(message: String) {
+        requestId++
+        toolJob?.cancel()
+        completeInterruptedCalls()
         reportInfo(interrupted = true)
         bridge.openRouterCancelChat()
         bridge.speechStop()
@@ -472,7 +584,7 @@ class OpenRouterPipeline(
 
     private fun keepWhatWasSaid() {
         val said = sentences.take(startedSentences).joinToString(" ")
-        if (said.isNotEmpty()) turns += Role.Kompis to said
+        if (said.isNotEmpty()) turns += Message(Role.Kompis, said, clock())
     }
 
     // Modellene.
@@ -495,6 +607,7 @@ class OpenRouterPipeline(
     internal companion object {
         /** Hvor mange tidligere meldinger språkmodellen får med. */
         const val MaxHistory = 40
+        const val MaxToolRounds = 4
 
         private val json = Json { encodeDefaults = true }
     }

@@ -174,7 +174,7 @@ fun ConversationScreen(
                         )
                     }
                 }
-                items(conversation.messages) { ChatMessage(it.role, it.text, dark = false, info = it.info) }
+                items(conversation.messages) { if (it.card != null) ToolCardView(it.card, dark = false) else ChatMessage(it.role, it.text, dark = false, info = it.info) }
             }
         }
 
@@ -268,3 +268,17 @@ private fun TitleEditor(value: TextFieldValue, onChange: (TextFieldValue) -> Uni
 
 /** Teksten med alt markert, så man kan skrive rett over det gamle navnet. */
 private fun String.selectedAll() = TextFieldValue(this, selection = TextRange(0, length))
+
+@Composable
+internal fun ToolCardView(card: no.jodal.salat.apps.kompis.tools.ToolCard, dark: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(if (dark) KompisPalette.NightSurface else colors.surfaceContainer)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("⏰  ${card.title}", style = MaterialTheme.typography.titleSmall, color = if (dark) Color.White else colors.onSurface)
+        card.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (dark) Color.White else colors.onSurfaceVariant) }
+    }
+}

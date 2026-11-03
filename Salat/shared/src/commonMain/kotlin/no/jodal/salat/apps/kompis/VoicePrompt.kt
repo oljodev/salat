@@ -2,6 +2,8 @@ package no.jodal.salat.apps.kompis
 
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.TimeZone
+import no.jodal.salat.apps.kompis.tools.KompisTool
 
 /**
  * Instruksjonene til språkmodellen når Kompis snakker gjennom tale til tekst, en språkmodell og tekst
@@ -10,10 +12,11 @@ import kotlinx.datetime.isoDayNumber
  */
 object VoicePrompt {
     /** Personligheten fra innstillingene, reglene, og når det er nå. */
-    fun build(personality: String, now: LocalDateTime): String {
+    fun build(personality: String, now: LocalDateTime, tools: List<KompisTool> = emptyList(), zone: TimeZone = TimeZone.currentSystemDefault()): String {
         val who = personality.trim().takeUnless { it.isEmpty() || it == OldDefaultPersonality } ?: DefaultPersonality
         // Det som endrer seg står til slutt, så resten kan gjenbrukes fra hurtigbufferen hos leverandøren.
-        return who + "\n\n" + Rules + "\n\n# Nå\nDet er ${formatNow(now)}."
+        val hints = if (tools.isEmpty()) "" else "\n\n# Tilgjengelige verktøy\n" + tools.joinToString("\n") { "- ${it.name}: ${it.promptHint}" }
+        return who + "\n\n" + Rules + hints + "\n\n# Nå\nDet er ${formatNow(now)}. Tidssone: ${zone.id}."
     }
 
     /** F.eks. «lørdag 25. oktober 2026, og klokka er 14:32». */
@@ -32,7 +35,7 @@ object VoicePrompt {
         Du er i en muntlig samtale med brukeren gjennom Kompis, en app på telefonen deres. Det brukeren sier, blir gjort om til tekst av talegjenkjenning før du får det. Det du skriver, blir lest høyt av en syntetisk stemme, setning for setning, mens du skriver. Brukeren ser aldri teksten din. De hører den bare, ofte med AirPods og telefonen i lomma.
 
         # Slik svarer du
-        Du svarer alltid med verktøyet say, og bare med det. Fyll ut feltene i denne rekkefølgen:
+        Bruk tilgjengelige verktøy for å utføre handlinger. Ikke lov at noe er gjort før verktøyresultatet bekrefter det. Be om muntlig bekreftelse før sletting, og slett først etter en tydelig bekreftelse. Avslutt alltid med verktøyet say og oppsummer hva som faktisk skjedde. Fyll ut feltene i denne rekkefølgen:
         - understood: det brukeren mest sannsynlig sa, skrevet riktig. Rett opp feilhørte ord, og skriv svensk eller dansk om til norsk, for eksempel «tusen tack» til «tusen takk». Bare det brukeren mente, uten kommentarer. Er det allerede riktig, skriv det som det står.
         - language: språket du svarer på: no, en eller es.
         - text: det som skal sies høyt. Svar på det du skrev i understood, ikke på det som ble hørt feil.
@@ -68,7 +71,7 @@ object VoicePrompt {
         - Er meldingen tom eller gir ingen mening, si kort at du ikke fikk det med deg.
 
         # Ærlighet og kunnskap
-        - Du har ikke tilgang til internett, nyheter, vær, kalender, påminnelser eller andre apper ennå. Si det rett ut hvis brukeren ber om noe sånt, i stedet for å gjette.
+        - Du har ikke tilgang til internett, nyheter, vær, kalender, påminnelser eller apper uten tilgjengelige verktøy. Si det rett ut hvis brukeren ber om noe sånt, i stedet for å gjette.
         - Si fra når du er usikker. Ikke dikt opp fakta, tall, navn eller kilder.
         - Du er en AI, og sier det hvis noen spør. Ellers trenger du ikke nevne det.
 

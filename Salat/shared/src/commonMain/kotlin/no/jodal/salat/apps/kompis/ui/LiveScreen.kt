@@ -63,6 +63,7 @@ enum class LiveStatus(val label: String, val voice: VoiceMode) {
     Listening("Lytter", VoiceMode.Listening),
     Recording("Tar opp", VoiceMode.Listening),
     Thinking("Tenker", VoiceMode.Thinking),
+    Working("Jobber", VoiceMode.Thinking),
     Speaking("Snakker", VoiceMode.Speaking),
     Reconnecting("Kobler til igjen", VoiceMode.Thinking),
     Muted("Mikrofonen er av", VoiceMode.Idle),
@@ -276,7 +277,7 @@ private fun Transcript(state: LiveUiState) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(state.messages) { ChatMessage(it.role, it.text, dark = true, info = it.info) }
+        items(state.messages) { if (it.card != null) ToolCardView(it.card, dark = true) else ChatMessage(it.role, it.text, dark = true, info = it.info) }
         state.userDraft?.let { item { ChatMessage(Role.User, it, dark = true, draft = true) } }
         state.kompisDraft?.let { item { ChatMessage(Role.Kompis, it, dark = true, draft = true) } }
         state.debug?.let {

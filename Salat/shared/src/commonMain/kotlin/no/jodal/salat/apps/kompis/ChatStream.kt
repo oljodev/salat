@@ -3,11 +3,11 @@ package no.jodal.salat.apps.kompis
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObjectBuilder
+import no.jodal.salat.apps.kompis.tools.KompisTool
+import no.jodal.salat.apps.kompis.tools.KompisTools
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -23,8 +23,8 @@ import kotlinx.serialization.json.putJsonObject
 internal data class ChatChunk(
     /** Ny tekst i svaret, eller tom. */
     val content: String,
-    /** Ny bit av argumentene til verktøykallet, eller tom. */
-    val toolArguments: String,
+    /** Verktøydeltaer, adskilt med indeks. */
+    val toolCalls: List<ToolCallDelta>,
     val provider: String?,
     /** Forbruk og pris, i den siste hendelsen. */
     val usage: JsonObject?,
@@ -44,10 +44,13 @@ internal fun parseChatChunk(dataJson: String): ChatChunk? {
     val choice = (event["choices"] as? JsonArray)?.firstOrNull()?.jsonObjectOrNull()
     val delta = choice?.get("delta")?.jsonObjectOrNull()
     val content = delta?.string("content").orEmpty()
-    val toolArguments = (delta?.get("tool_calls") as? JsonArray)
-        ?.joinToString("") { it.jsonObjectOrNull()?.get("function")?.jsonObjectOrNull()?.string("arguments").orEmpty() }
-        .orEmpty()
-    return ChatChunk(content, toolArguments, event.string("provider"), event["usage"]?.jsonObjectOrNull(), error, event.string("model"))
+    val toolCalls = (delta?.get("tool_calls") as? JsonArray)?.mapNotNull { element ->
+        val call = element.jsonObjectOrNull() ?: return@mapNotNull null
+        val index = call.int("index") ?: return@mapNotNull null
+        val function = call["function"]?.jsonObjectOrNull()
+        ToolCallDelta(index, call.string("id"), function?.string("name"), function?.string("arguments").orEmpty())
+    }.orEmpty()
+    return ChatChunk(content, toolCalls, event.string("provider"), event["usage"]?.jsonObjectOrNull(), error, event.string("model"))
 }
 
 internal fun JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject
@@ -67,8 +70,8 @@ internal object LlmRequest {
         providers: List<String>,
         model: OpenRouterModel?,
         prompt: String,
-        messages: List<Pair<Role, String>>,
-        tools: Boolean = true,
+        messages: List<Message>,
+        tools: List<KompisTool> = KompisTools().all,
         routing: LlmRouting = LlmRouting(),
     ): String = buildJsonObject {
         put("model", modelId)
@@ -80,10 +83,25 @@ internal object LlmRequest {
                 put("role", "system")
                 put("content", prompt)
             }
-            for ((role, text) in messages) {
+            for (message in messages) {
                 addJsonObject {
-                    put("role", if (role == Role.User) "user" else "assistant")
-                    put("content", text)
+                    put("role", when (message.role) {
+                        Role.User -> "user"
+                        Role.Kompis -> "assistant"
+                        Role.Tool -> "tool"
+                    })
+                    put("content", message.text)
+                    message.toolCallId?.let { put("tool_call_id", it) }
+                    if (message.toolCalls.isNotEmpty()) putJsonArray("tool_calls") {
+                        message.toolCalls.forEach { call -> addJsonObject {
+                            put("id", call.id)
+                            put("type", "function")
+                            putJsonObject("function") {
+                                put("name", call.name)
+                                put("arguments", call.arguments)
+                            }
+                        } }
+                    }
                 }
             }
         }
@@ -96,56 +114,19 @@ internal object LlmRequest {
             reasoning.supportsNone -> putJsonObject("reasoning") { put("effort", "none") }
             else -> putJsonObject("reasoning") { put("enabled", false) }
         }
-        if (tools) {
-            putJsonArray("tools") { addJsonObject { sayTool() } }
-            putJsonObject("tool_choice") {
-                put("type", "function")
-                putJsonObject("function") { put("name", "say") }
+        if (tools.isNotEmpty()) {
+            putJsonArray("tools") {
+                tools.forEach { tool -> addJsonObject {
+                    put("type", "function")
+                    putJsonObject("function") {
+                        put("name", tool.name)
+                        put("description", tool.description)
+                        put("parameters", tool.parameters)
+                    }
+                } }
             }
+            put("tool_choice", "required")
         }
         llmProviderPreferences(providers, routing)
     }.toString()
-}
-
-/**
- * Verktøyet Kompis svarer med. Feltene står i den rekkefølgen modellen skriver dem: først hva den tror
- * brukeren sa, så er det lettere å svare på det brukeren mente og ikke på det som ble hørt feil.
- */
-private fun JsonObjectBuilder.sayTool() {
-    put("type", "function")
-    putJsonObject("function") {
-        put("name", "say")
-        put("description", "Si noe høyt til brukeren. Dette er den eneste måten du svarer på.")
-        putJsonObject("parameters") {
-            put("type", "object")
-            putJsonObject("properties") {
-                putJsonObject("understood") {
-                    put("type", "string")
-                    put(
-                        "description",
-                        "Hva brukeren mest sannsynlig sa, skrevet riktig. Talegjenkjenningen kan ha hørt norsk som svensk eller dansk " +
-                            "eller hørt ord feil. Rett det opp. Bare det brukeren mente, uten kommentarer.",
-                    )
-                }
-                putJsonObject("language") {
-                    put("type", "string")
-                    putJsonArray("enum") {
-                        add("no")
-                        add("en")
-                        add("es")
-                    }
-                    put("description", "Språket du svarer på.")
-                }
-                putJsonObject("text") {
-                    put("type", "string")
-                    put("description", "Det som skal sies høyt, som ren tekst slik det skal høres.")
-                }
-            }
-            putJsonArray("required") {
-                add("understood")
-                add("language")
-                add("text")
-            }
-        }
-    }
 }

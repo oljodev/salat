@@ -85,6 +85,15 @@ internal fun MessageInfoSheet(role: Role, info: MessageInfo?, onDismiss: () -> U
                     }
                 }
                 if (info != null) {
+                    if (info.tools.isNotEmpty()) item {
+                        SettingsSection("Verktøykall") {
+                            info.tools.forEach { call ->
+                                Text(call.name + if (call.isError) " · Feil" else "", style = MaterialTheme.typography.titleSmall)
+                                Text("Argumenter: ${call.arguments}", style = MaterialTheme.typography.bodySmall)
+                                Text("Resultat: ${call.result}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                     val stats = info.stats
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
