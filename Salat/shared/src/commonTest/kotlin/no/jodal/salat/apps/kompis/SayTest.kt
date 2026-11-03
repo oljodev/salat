@@ -54,16 +54,7 @@ class SayTest {
         assertEquals(listOf("", "", "", "Bare hyg", "gelig! Og", " du?"), deltas)
         assertEquals("Bare hyggelig! Og du?", stream.text)
         assertEquals("Tusen takk", stream.understood)
-        assertEquals("no", stream.language)
         assertTrue(stream.usedTool)
-    }
-
-    @Test
-    fun languageNamesAreCleanedUp() {
-        val stream = SayStream()
-        stream.add(args("""{"understood":" Hei ","language":"Norwegian","text":"Hei"}"""))
-        assertEquals("Hei", stream.understood)
-        assertEquals("no", stream.language)
     }
 
     @Test

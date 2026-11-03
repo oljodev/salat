@@ -228,7 +228,6 @@ class LlmTest(
             reasoningTokens = usage?.get("completion_tokens_details")?.jsonObjectOrNull()?.int("reasoning_tokens"),
             costUsd = usage?.get("cost")?.let { (it as? JsonPrimitive)?.doubleOrNull },
             understood = stream.understood,
-            language = stream.language,
         )
         messages = messages + LlmMessage(Role.Kompis, text.ifEmpty { "(tomt svar)" }, stats)
         draft = null

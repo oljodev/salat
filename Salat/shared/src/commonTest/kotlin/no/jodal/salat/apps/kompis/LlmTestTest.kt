@@ -96,8 +96,8 @@ class LlmTestTest {
         val tool = body["tools"]!!.jsonArray.single().jsonObject["function"]!!.jsonObject
         assertEquals("say", tool["name"]!!.jsonPrimitive.content)
         val parameters = tool["parameters"]!!.jsonObject
-        assertEquals(listOf("understood", "language", "text"), parameters["properties"]!!.jsonObject.keys.toList())
-        assertEquals(listOf("understood", "language", "text"), parameters["required"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(listOf("understood", "text"), parameters["properties"]!!.jsonObject.keys.toList())
+        assertEquals(listOf("understood", "text"), parameters["required"]!!.jsonArray.map { it.jsonPrimitive.content })
     }
 
     @Test
@@ -115,7 +115,7 @@ class LlmTestTest {
         assertEquals("Bare hyggelig! Og du?", answer.text)
         val stats = answer.stats!!
         assertEquals("Tusen takk", stats.understood)
-        assertEquals("no", stats.language)
+        assertNull(stats.language)
         assertEquals(220L, stats.firstTokenMillis, "første ord, ikke første token")
         assertEquals(260L, stats.firstSentenceMillis)
     }

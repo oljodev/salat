@@ -29,15 +29,6 @@ private fun JsonObjectBuilder.sayDefinition() {
                             "eller hørt ord feil. Rett det opp. Bare det brukeren mente, uten kommentarer.",
                     )
                 }
-                putJsonObject("language") {
-                    put("type", "string")
-                    putJsonArray("enum") {
-                        add("no")
-                        add("en")
-                        add("es")
-                    }
-                    put("description", "Språket du svarer på.")
-                }
                 putJsonObject("text") {
                     put("type", "string")
                     put("description", "Det som skal sies høyt, som ren tekst slik det skal høres.")
@@ -45,7 +36,6 @@ private fun JsonObjectBuilder.sayDefinition() {
             }
             putJsonArray("required") {
                 add("understood")
-                add("language")
                 add("text")
             }
         }

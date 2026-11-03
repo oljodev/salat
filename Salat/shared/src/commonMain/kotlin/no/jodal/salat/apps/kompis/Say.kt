@@ -120,10 +120,6 @@ internal class SayStream {
     var understood: String? = null
         private set
 
-    /** Språket modellen svarer på (`no`, `en` eller `es`), når det er skrevet ferdig. */
-    var language: String? = null
-        private set
-
     /** Det som skal sies, så langt. */
     var text = ""
         private set
@@ -151,7 +147,6 @@ internal class SayStream {
     private fun readTool(): String {
         val fields = PartialJson.strings(arguments.toString())
         fields["understood"]?.takeIf { it.complete }?.let { understood = it.value.trim().ifEmpty { null } }
-        fields["language"]?.takeIf { it.complete }?.let { language = OpenRouter.normalizeLanguage(it.value).ifEmpty { null } }
         val spoken = fields["text"]?.value.orEmpty()
         if (!spoken.startsWith(text)) return ""
         val added = spoken.substring(text.length)

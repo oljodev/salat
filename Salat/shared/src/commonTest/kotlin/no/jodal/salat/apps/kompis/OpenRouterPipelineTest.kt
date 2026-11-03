@@ -158,13 +158,13 @@ class OpenRouterPipelineTest {
         assertEquals(listOf("speak s0"), bridge.pipelineCalls.drop(2))
         chunk("Den er")
         chunk(" rask. Og")
-        assertEquals(listOf("speak s0", "speak s1"), bridge.pipelineCalls.drop(2))
+        assertEquals(listOf("speak s0"), bridge.pipelineCalls.drop(2))
         chunk(" stor!")
         chat.onDone(900)
-        assertEquals(listOf("speak s0", "speak s1", "speak s2", "finish"), bridge.pipelineCalls.drop(2))
+        assertEquals(listOf("speak s0", "speak s1", "finish"), bridge.pipelineCalls.drop(2))
 
         val body = Json.parseToJsonElement(bridge.speechBodies["s1"]!!).jsonObject
-        assertEquals("Den er rask.", body["input"]!!.jsonPrimitive.content)
+        assertEquals("Den er rask. Og stor!", body["input"]!!.jsonPrimitive.content)
         assertEquals("mistralai/voxtral-mini-tts-3-0", body["model"]!!.jsonPrimitive.content)
         assertEquals("nb-NO-Harper", body["voice"]!!.jsonPrimitive.content, "norsk stemme først")
         assertEquals("pcm", body["response_format"]!!.jsonPrimitive.content)
@@ -176,12 +176,10 @@ class OpenRouterPipelineTest {
         speech.onItemFinished("s0")
         speech.onItemStarted("s1")
         speech.onItemFinished("s1")
-        speech.onItemStarted("s2")
-        speech.onItemFinished("s2")
         speech.onFinished()
 
         val spoken = host.events.filter { it.startsWith("kompis") }
-        assertEquals(listOf("kompis En hare er et dyr.", "kompis  Den er rask.", "kompis  Og stor!"), spoken)
+        assertEquals(listOf("kompis En hare er et dyr.", "kompis  Den er rask. Og stor!"), spoken)
         assertEquals("status speaking", host.events.first { it.startsWith("status speaking") })
         assertEquals(listOf("turn complete", "status listening", "timings"), host.events.takeLast(3))
 
@@ -226,7 +224,6 @@ class OpenRouterPipelineTest {
         chunk("Så")
         speech.onItemStarted("s0")
         speech.onItemFinished("s0")
-        speech.onItemStarted("s1")
         bridge.pipelineCalls.clear()
         host.events.clear()
 
@@ -244,7 +241,7 @@ class OpenRouterPipelineTest {
         pipeline.talkStop()
         stt.onTranscribed("""{"text":"Stopp"}""", 1.0, 32_000, 200)
         val roles = lastRequest()["messages"]!!.jsonArray.map { it.jsonObject }
-        assertEquals("Det var en gang. En hare løp.", roles[roles.size - 2]["content"]!!.jsonPrimitive.content)
+        assertEquals("Det var en gang.", roles[roles.size - 2]["content"]!!.jsonPrimitive.content)
         assertEquals("assistant", roles[roles.size - 2]["role"]!!.jsonPrimitive.content)
     }
 
@@ -285,6 +282,22 @@ class OpenRouterPipelineTest {
     }
 
     @Test
+    fun shortSentencesAreBatchedAfterFirstAndFlushedAtEnd() {
+        openAndGoToListening()
+        say("Fortell")
+        chunk("Første. ")
+        assertEquals("Første.", spokenInput("s0"))
+        chunk("Andre. Tredje. ")
+        assertEquals(1, bridge.speechBodies.size)
+        chunk("Fjerde. ")
+        assertEquals("Andre. Tredje. Fjerde.", spokenInput("s1"))
+        chunk("Siste")
+        chat.onDone(500)
+        assertEquals("Siste", spokenInput("s2"))
+        assertTrue(Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject["instructions"]!!.jsonPrimitive.content.contains("østnorsk"))
+    }
+
+    @Test
     fun noAnswerBringsYouBackToListening() {
         openAndGoToListening()
         say("Hei")
@@ -318,7 +331,7 @@ class OpenRouterPipelineTest {
         chunk("Hei på deg. ")
         val body = Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject
         assertEquals("voice_3150", body["voice"]!!.jsonPrimitive.content)
-        assertEquals("rolig", body["instructions"]!!.jsonPrimitive.content)
+        assertTrue(body["instructions"]!!.jsonPrimitive.content.endsWith(" rolig"))
     }
 
     @Test
@@ -495,7 +508,7 @@ class OpenRouterPipelineTest {
         val first = Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject
         assertEquals("Sure!", first["input"]!!.jsonPrimitive.content)
         assertEquals("voice_3150", first["voice"]!!.jsonPrimitive.content)
-        assertEquals("rolig", first["instructions"]!!.jsonPrimitive.content)
+        assertTrue(first["instructions"]!!.jsonPrimitive.content.endsWith(" rolig"))
 
         // Samme stemme på norsk.
         speech.onFinished()
@@ -506,7 +519,7 @@ class OpenRouterPipelineTest {
         val norwegian = Json.parseToJsonElement(bridge.speechBodies["s0"]!!).jsonObject
         assertEquals("Bare hyggelig", norwegian["input"]!!.jsonPrimitive.content)
         assertEquals("voice_3150", norwegian["voice"]!!.jsonPrimitive.content)
-        assertEquals("rolig", norwegian["instructions"]!!.jsonPrimitive.content)
+        assertTrue(norwegian["instructions"]!!.jsonPrimitive.content.endsWith(" rolig"))
     }
 
     @Test

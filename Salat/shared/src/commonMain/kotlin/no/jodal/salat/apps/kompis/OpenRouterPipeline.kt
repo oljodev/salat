@@ -84,6 +84,7 @@ class OpenRouterPipeline(
     private var understoodHandled = false
     private val buffer = StringBuilder()
     private val sentences = mutableListOf<String>()
+    private val pendingSentences = mutableListOf<String>()
     private var startedSentences = 0
     private var chatDone = false
 
@@ -274,6 +275,7 @@ class OpenRouterPipeline(
         understoodHandled = false
         buffer.clear()
         sentences.clear()
+        pendingSentences.clear()
         startedSentences = 0
         chatDone = false
         sentenceMillis = null
@@ -331,19 +333,19 @@ class OpenRouterPipeline(
             if (firstTokenMillis == null && (chunk.content.isNotEmpty() || chunk.toolCalls.isNotEmpty())) {
                 firstTokenMillis = totalLlmMillis + millis
             }
-            // Modellen svarer med verktøyet say: først hva den tror du sa, så språket, og så det som skal sies.
+            // Modellen svarer med verktøyet say: først hva den tror du sa, så det som skal sies.
             calls.add(chunk.toolCalls)
             val added = stream.add(chunk)
             useUnderstood()
             if (added.isEmpty()) return
             buffer.append(added)
             val (complete, rest) = Sentences.split(buffer.toString())
-            complete.forEach { enqueue(it) }
+            complete.forEach { queueSentence(it) }
             var remaining = rest
             // Lange setninger uten punktum deles ved et komma, så stemmen kan begynne.
             while (true) {
                 val (clause, after) = Sentences.cutLongClause(remaining) ?: break
-                enqueue(clause)
+                queueSentence(clause)
                 remaining = after
             }
             buffer.clear()
@@ -384,7 +386,8 @@ class OpenRouterPipeline(
                 executeCalls(completed)
                 return
             }
-            enqueue(buffer.toString())
+            queueSentence(buffer.toString())
+            flushPendingSentences()
             buffer.clear()
             llmStats = llmStats?.copy(firstSentenceMillis = sentenceMillis)
             if (sentences.isEmpty()) {
@@ -465,6 +468,24 @@ class OpenRouterPipeline(
         turns[index] = turns[index].copy(text = understood)
     }
 
+    /** Første setning sendes straks. Resten samles for et mer sammenhengende tonefall. */
+    private fun queueSentence(raw: String) {
+        val text = Sentences.speakable(raw)
+        if (text.isEmpty()) return
+        if (sentences.isEmpty()) {
+            enqueue(text)
+            return
+        }
+        pendingSentences += text
+        if (pendingSentences.size >= 3 || pendingSentences.sumOf { it.length } >= 120) flushPendingSentences()
+    }
+
+    private fun flushPendingSentences() {
+        if (pendingSentences.isEmpty()) return
+        enqueue(pendingSentences.joinToString(" "))
+        pendingSentences.clear()
+    }
+
     /** Sender [raw] til stemmen, hvis det er noe å lese. */
     private fun enqueue(raw: String) {
         val text = Sentences.speakable(raw)
@@ -480,7 +501,9 @@ class OpenRouterPipeline(
         put("model", settings.ttsModel)
         put("input", text)
         voice()?.let { put("voice", it) }
-        settings.ttsInstructions.trim().ifEmpty { null }?.let { put("instructions", it) }
+        val base = "Snakk norsk bokmål med østnorsk uttale i et jevnt og rolig tempo, med naturlige, korte pauser. Følg språket i teksten."
+        val custom = settings.ttsInstructions.trim()
+        put("instructions", if (custom.isEmpty()) base else "$base $custom")
         put("response_format", "pcm")
     }.toString()
 
