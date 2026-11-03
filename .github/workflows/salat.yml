@@ -59,6 +59,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      - name: Run shared tests
+        run: ./gradlew :shared:desktopTest
+
       # En ny nøkkel per kjøring lar cachen vokse med nye kompilerte avhengigheter.
       # restore-keys henter den nyeste kompatible cachen fra et tidligere bygg.
       - name: Cache Kotlin/Native
