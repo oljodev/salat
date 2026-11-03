@@ -14,18 +14,19 @@ enum OpenRouter {
         var request = URLRequest(url: url)
         request.timeoutInterval = 20
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            DispatchQueue.main.async {
-                if let error {
-                    completion(nil, "Fikk ikke kontakt med OpenRouter: \(error.localizedDescription)")
-                } else if status == 200, let data {
+        Task { @MainActor in
+            do {
+                let (data, response) = try await OpenRouterRetry.run(operation: { try await URLSession.shared.data(for: request) })
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status == 200 {
                     completion(String(decoding: data, as: UTF8.self), nil)
                 } else {
                     completion(nil, errorMessage(status: status, data: data))
                 }
+            } catch {
+                completion(nil, "Fikk ikke kontakt med OpenRouter: \(error.localizedDescription)")
             }
-        }.resume()
+        }
     }
 
     /// Åpner forbindelsen til OpenRouter, så neste kall ikke må vente på at den kobles opp. Svaret
@@ -45,6 +46,8 @@ enum OpenRouter {
         switch status {
         case 401: return "OpenRouter godtok ikke nøkkelen. Sjekk den i innstillingene."
         case 402: return "Det er ikke nok kreditt på OpenRouter-kontoen."
+        case 500, 502, 503, 504:
+            return "Tjenesten hos OpenRouter eller modellleverandøren er midlertidig utilgjengelig (\(status)). Prøv igjen om litt."
         default: return "OpenRouter svarte med feil \(status)" + (message.map { ": \($0)" } ?? ".")
         }
     }
@@ -83,7 +86,10 @@ final class OpenRouterChat {
 
         task = Task {
             do {
-                let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                let (bytes, response) = try await OpenRouterRetry.run(
+                    operation: { try await URLSession.shared.bytes(for: request) },
+                    discard: { bytes in for try await _ in bytes {} }
+                )
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard status == 200 else {
                     // Feil før strømmen starter, kommer som vanlig JSON.

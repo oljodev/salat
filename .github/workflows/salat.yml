@@ -43,6 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check OpenRouter retry handling
+        working-directory: .
+        run: |
+          swiftc -swift-version 5 -parse-as-library \
+            Salat/iosApp/Salat/OpenRouterRetry.swift \
+            .github/scripts/check_openrouter_retry.swift \
+            -o "$RUNNER_TEMP/check-openrouter-retry"
+          "$RUNNER_TEMP/check-openrouter-retry"
+
       - uses: actions/setup-java@v6
         with:
           distribution: temurin

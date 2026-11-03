@@ -16,6 +16,7 @@ final class SttRecorder {
     }
 
     private var listener: SttListener?
+    private var transcriptionTask: Task<Void, Never>?
     private var isOpen = false
     /// En samtale med Kompis eier mikrofonen, så testen av tale til tekst ikke kan ta den.
     private var isConversation = false
@@ -59,6 +60,7 @@ final class SttRecorder {
             return
         }
         close(force: true)
+        transcriptionTask?.cancel()
         isConversation = conversation
         self.listener = listener
         isOpen = true
@@ -81,6 +83,7 @@ final class SttRecorder {
     func close(force: Bool = false) {
         guard isOpen, force || !isConversation else { return }
         isOpen = false
+        if isConversation { transcriptionTask?.cancel() }
         isConversation = false
         listener = nil
         stopAudio()
@@ -167,13 +170,14 @@ final class SttRecorder {
 
         // Svaret skal fram selv om testskjermen lukkes i mellomtiden.
         let listener = self.listener
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            let millis = Int64(Date().timeIntervalSince(since) * 1000)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            DispatchQueue.main.async {
-                if let error {
-                    listener?.onError(message: "Fikk ikke kontakt med OpenRouter: \(error.localizedDescription)")
-                } else if status == 200, let data {
+        transcriptionTask?.cancel()
+        transcriptionTask = Task { @MainActor in
+            do {
+                let (data, response) = try await OpenRouterRetry.run(operation: { try await URLSession.shared.data(for: request) })
+                try Task.checkCancellation()
+                let millis = Int64(Date().timeIntervalSince(since) * 1000)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                if status == 200 {
                     listener?.onTranscribed(
                         responseJson: String(decoding: data, as: UTF8.self),
                         audioSeconds: seconds,
@@ -188,8 +192,11 @@ final class SttRecorder {
                 } else {
                     listener?.onError(message: OpenRouter.errorMessage(status: status, data: data))
                 }
+            } catch {
+                guard !Task.isCancelled else { return }
+                listener?.onError(message: "Fikk ikke kontakt med OpenRouter: \(error.localizedDescription)")
             }
-        }.resume()
+        }
     }
 
     /// Forklarer hvorfor det nesten ikke ble noe lyd: knappen, eller mikrofonen.

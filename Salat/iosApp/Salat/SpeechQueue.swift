@@ -77,7 +77,10 @@ final class SpeechQueue {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-                let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                let (bytes, response) = try await OpenRouterRetry.run(
+                    operation: { try await URLSession.shared.bytes(for: request) },
+                    discard: { bytes in for try await _ in bytes {} }
+                )
                 let http = response as? HTTPURLResponse
                 let status = http?.statusCode ?? 0
                 guard status == 200 else {

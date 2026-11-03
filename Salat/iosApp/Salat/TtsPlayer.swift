@@ -205,7 +205,10 @@ final class TtsPlayer {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        return try await URLSession.shared.bytes(for: request)
+        return try await OpenRouterRetry.run(
+            operation: { try await URLSession.shared.bytes(for: request) },
+            discard: { bytes in for try await _ in bytes {} }
+        )
     }
 
     private static func collect(_ bytes: URLSession.AsyncBytes) async throws -> Data {
