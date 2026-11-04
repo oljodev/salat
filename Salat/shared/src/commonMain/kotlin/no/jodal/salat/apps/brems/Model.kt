@@ -33,7 +33,7 @@ data class BremsSettings(
     val limitMinutes: Int = 10,
     /** Den lengre pausen, i sekunder. Tiden man er borte fra appene, teller med. */
     val limitPauseSeconds: Int = 60,
-    /** Nytt varsel hvert så mange minutt etter grensen. 0 er av. */
+    /** Flere varsler etter grensen ([BremsRules.NagAfterMinutes]). 0 er av. */
     val nagMinutes: Int = 2,
     val breathing: Boolean = true,
     val showUsage: Boolean = true,

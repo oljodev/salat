@@ -128,16 +128,19 @@ object BremsRules {
             "Lukk $name og legg fra deg telefonen i ${formatSeconds(settings.limitPauseSeconds)}.",
         )
         if (settings.nagMinutes > 0) {
-            for (i in 1..NagCount) {
-                val minutes = settings.limitMinutes + i * settings.nagMinutes
+            for (after in NagAfterMinutes) {
+                val minutes = settings.limitMinutes + after
                 notices += SessionNotice(minutes, "${formatMinutes(minutes)} i $name", "Du er over grensen din. Lukk appen.")
             }
         }
         return notices
     }
 
-    /** Så mange ekstra varsler sendes etter grensen. iOS tar bare vare på 64 planlagte varsler. */
-    const val NagCount = 10
+    /**
+     * Når de ekstra varslene kommer, i minutter etter grensen. Brems får ikke vite om en app er lukket
+     * uten at Snarveier sier fra, så få varsler gir få falske alarmer hvis det glipper.
+     */
+    val NagAfterMinutes = listOf(2, 5, 10, 15)
 
     /** Fjerner det som er eldre enn [KeepMillis]. */
     fun trim(data: BremsData, now: Long): BremsData {

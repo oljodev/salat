@@ -52,6 +52,11 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
         }
     }
 
+    /** Salat er åpnet, så appen som var åpen er forlatt. Avslutter økta og fjerner varslene. */
+    fun salatOpened() {
+        if (data.active != null) closed()
+    }
+
     /** Skriver [text] i loggen. */
     fun log(text: String) = update { it.copy(log = (it.log + LogEntry(nowMillis(), text)).takeLast(LogSize)) }
 
@@ -125,6 +130,9 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
 /** Et varsel som skal komme ved [atMillis]. */
 @Serializable
 data class ScheduledNotice(val title: String, val body: String, val atMillis: Long)
+
+/** Kalles fra Swift hver gang Salat åpnes. */
+fun bremsSalatOpened(bridge: NativeBridge) = BremsStore.get(bridge).salatOpened()
 
 /** Kalles fra Snarveier når en app åpnes. Gir `true` hvis Brems skal åpnes og vise en pause. */
 fun bremsOpened(bridge: NativeBridge, app: String?): Boolean = BremsStore.get(bridge).opened(app)

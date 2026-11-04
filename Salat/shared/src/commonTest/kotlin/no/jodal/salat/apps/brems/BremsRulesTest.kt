@@ -111,9 +111,14 @@ class BremsRulesTest {
     @Test
     fun notificationsComeAtTheReminderTheLimitAndAfter() {
         val notices = BremsRules.notifications(BremsSettings(nagMinutes = 2), "TikTok")
-        assertEquals(listOf(5, 10, 12, 14), notices.take(4).map { it.minutes })
+        assertEquals(listOf(5, 10, 12, 15, 20, 25), notices.map { it.minutes })
         assertEquals("5 minutter i TikTok", notices.first().title)
-        assertEquals(2 + BremsRules.NagCount, notices.size)
+    }
+
+    @Test
+    fun noNagsWhenTurnedOff() {
+        val notices = BremsRules.notifications(BremsSettings(nagMinutes = 0), "TikTok")
+        assertEquals(listOf(5, 10), notices.map { it.minutes })
     }
 
     @Test

@@ -22,6 +22,8 @@ struct SalatApp: App {
                 Notifications.shared.scheduleExpiryReminder()
                 // Fyll på alarmer i Rise.
                 RiseStoreKt.refreshRise(bridge: IosNativeBridge.shared)
+                // Er Salat åpen, er appen Brems fulgte med på forlatt, så økta er over.
+                BremsStoreKt.bremsSalatOpened(bridge: IosNativeBridge.shared)
                 // Gi widgetene lydene i Ekko, og ta en lenke fra kontrollsenteret som venter.
                 EkkoWidgetsKt.refreshEkkoWidget(bridge: IosNativeBridge.shared)
                 WidgetActions.openPendingLink()

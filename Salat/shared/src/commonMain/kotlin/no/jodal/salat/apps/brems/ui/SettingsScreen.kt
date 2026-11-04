@@ -59,7 +59,6 @@ private val OpenPauseSteps = listOf(0, 5, 10, 15, 20, 30, 45, 60)
 private val ReminderSteps = listOf(0, 1, 2, 3, 5, 7, 10, 15, 20, 30, 45, 60)
 private val LimitSteps = listOf(1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120)
 private val LimitPauseSteps = listOf(15, 30, 45, 60, 90, 120, 180, 300, 600)
-private val NagSteps = listOf(0, 1, 2, 3, 5, 10)
 
 @Composable
 fun SettingsScreen(store: BremsStore, onBack: () -> Unit) {
@@ -101,8 +100,8 @@ fun SettingsScreen(store: BremsStore, onBack: () -> Unit) {
                 store.updateSettings { it.copy(limitPauseSeconds = v) }
             }
             RowDivider()
-            StepRow("Varsle igjen hvert", Icons.Rounded.Repeat, TileColors.Blue, settings.nagMinutes, NagSteps, ::minutes) { v ->
-                store.updateSettings { it.copy(nagMinutes = v) }
+            ToggleRow("Varsle igjen etter grensen", Icons.Rounded.Repeat, TileColors.Blue, settings.nagMinutes > 0) { on ->
+                store.updateSettings { it.copy(nagMinutes = if (on) 2 else 0) }
             }
         }
         Footnote(
