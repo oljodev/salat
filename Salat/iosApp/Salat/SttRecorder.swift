@@ -309,6 +309,21 @@ final class SttRecorder {
             name: AVAudioSession.routeChangeNotification,
             object: nil
         )
+        // Motoren stopper av seg selv når lydruten endrer format, f.eks. når AirPods bytter modus fordi
+        // mikrofonen starter. Da blir avspilleren stum uten at noe sier fra.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(engineConfigurationChanged),
+            name: .AVAudioEngineConfigurationChange,
+            object: engine
+        )
+    }
+
+    @objc private func engineConfigurationChanged() {
+        DispatchQueue.main.async {
+            guard self.isOpen, !self.engine.isRunning else { return }
+            self.startMicrophone()
+        }
     }
 
     private func stopAudio() {
