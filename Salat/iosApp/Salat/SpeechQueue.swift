@@ -205,6 +205,8 @@ final class SpeechQueue {
             fail("Lyden er ikke i gang. Avslutt samtalen og start den på nytt.")
             return false
         }
+        // En avspiller som står stille, tar imot lyd uten å spille den. Teksten vises, men stemmen uteblir.
+        if !recorder.player.isPlaying { recorder.player.play() }
         let target = recorder.playbackFormat
         let frames = data.count / 2
         guard frames > 0,
