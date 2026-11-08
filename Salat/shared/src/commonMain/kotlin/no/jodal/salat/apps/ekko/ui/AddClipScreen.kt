@@ -85,7 +85,7 @@ fun AddClipScreen(
                 heading = "Ny lyd",
                 clipId = draft.clipId,
                 initialTitle = draft.audio.title,
-                initialArtist = "",
+                initialArtist = draft.audio.artist,
                 sourceSeconds = draft.audio.durationSeconds,
                 waveform = draft.audio.waveform,
                 initialStart = 0.0,
@@ -181,7 +181,7 @@ private fun SourcePicker(state: EkkoImporter.State, importer: EkkoImporter, brid
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                "Virker med YouTube og YouTube Shorts. Snapchat Spotlight virker for noen videoer. " +
+                "Virker med YouTube, YouTube Shorts og videoer i offentlige poster på X. Snapchat Spotlight virker for noen videoer. " +
                     "Fra andre apper kan du lagre videoen eller ta opp skjermen, og hente den fra Bilder.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = EkkoPalette.TextDim,

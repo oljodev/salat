@@ -119,6 +119,9 @@ internal object FakeBridge : NativeBridge {
     override fun ekkoImportWeb(clipId: String, url: String, listener: EkkoImportListener) {
         ekkoCalls += "web $url"
     }
+    override fun ekkoImportX(clipId: String, apiUrl: String, listener: EkkoImportListener) {
+        ekkoCalls += "x $apiUrl"
+    }
     override fun ekkoImportFile(clipId: String, fromPhotos: Boolean, listener: EkkoImportListener) {
         ekkoCalls += if (fromPhotos) "photos" else "files"
     }

@@ -161,6 +161,8 @@ private object PreviewBridge : NativeBridge {
 
     override fun ekkoImportWeb(clipId: String, url: String, listener: EkkoImportListener) = fakeImport("Spotlight", listener)
 
+    override fun ekkoImportX(clipId: String, apiUrl: String, listener: EkkoImportListener) = fakeImport("Post på X", listener)
+
     override fun ekkoImportFile(clipId: String, fromPhotos: Boolean, listener: EkkoImportListener) =
         fakeImport(if (fromPhotos) "Video" else "Lydfil", listener)
 

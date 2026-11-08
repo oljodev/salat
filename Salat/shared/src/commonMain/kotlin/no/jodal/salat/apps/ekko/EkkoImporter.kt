@@ -34,17 +34,19 @@ class EkkoImporter private constructor(private val store: EkkoStore, private val
     fun fromText(text: String) {
         val link = EkkoLink.parse(text)
         if (link == null) {
-            state = State.Failed("Fant ingen lenke. Lim inn en lenke fra YouTube eller Snapchat.")
+            state = State.Failed("Fant ingen lenke. Lim inn en lenke fra YouTube, X eller Snapchat.")
             return
         }
         val source = when {
             link is EkkoLink.YouTube -> "YouTube"
+            link is EkkoLink.X -> "X"
             link is EkkoLink.Web && link.isSnapchat -> "Snapchat"
             else -> "nettsiden"
         }
         val id = begin(link.url, source)
         when (link) {
             is EkkoLink.YouTube -> bridge.ekkoImportYouTube(id, link.videoId, this)
+            is EkkoLink.X -> bridge.ekkoImportX(id, link.apiUrl, this)
             is EkkoLink.Web -> bridge.ekkoImportWeb(id, link.url, this)
         }
     }

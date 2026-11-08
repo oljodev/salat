@@ -146,6 +146,9 @@ interface NativeBridge {
     /** Henter lyden fra YouTube-videoen [videoId] og lagrer den som [clipId]. */
     fun ekkoImportYouTube(clipId: String, videoId: String, listener: EkkoImportListener)
 
+    /** Henter videoen i en post på X fra [apiUrl] (se `EkkoLink.X.apiUrl`), og lagrer lyden som [clipId]. */
+    fun ekkoImportX(clipId: String, apiUrl: String, listener: EkkoImportListener)
+
     /** Leter etter en video på nettsiden [url] (f.eks. Snapchat Spotlight), og lagrer lyden som [clipId]. */
     fun ekkoImportWeb(clipId: String, url: String, listener: EkkoImportListener)
 

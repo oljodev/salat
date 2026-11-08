@@ -639,7 +639,7 @@ private fun EmptyLibrary(onAdd: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text("Ingen lyder ennå", style = MaterialTheme.typography.titleLarge, color = EkkoPalette.Text)
         Text(
-            "Lim inn en lenke til en YouTube Short eller en Spotlight, eller hent lyden fra en video på telefonen.",
+            "Lim inn en lenke til en YouTube Short, en video på X eller en Spotlight, eller hent lyden fra en video på telefonen.",
             style = MaterialTheme.typography.bodyMedium,
             color = EkkoPalette.TextDim,
             textAlign = TextAlign.Center,

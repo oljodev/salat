@@ -156,6 +156,10 @@ final class IosNativeBridge: NSObject, NativeBridge {
         EkkoImport.shared.youTube(clipId: clipId, videoId: videoId, listener: listener)
     }
 
+    func ekkoImportX(clipId: String, apiUrl: String, listener: EkkoImportListener) {
+        EkkoImport.shared.x(clipId: clipId, apiUrl: apiUrl, listener: listener)
+    }
+
     func ekkoImportWeb(clipId: String, url: String, listener: EkkoImportListener) {
         EkkoImport.shared.web(clipId: clipId, url: url, listener: listener)
     }

@@ -39,4 +39,36 @@ class LinksTest {
         assertNull(EkkoLink.parse("bare litt tekst"))
         assertNull(EkkoLink.parse(""))
     }
+
+    private fun xPostId(text: String) = (EkkoLink.parse(text) as? EkkoLink.X)?.postId
+
+    @Test
+    fun findsPostIdsInLinksFromX() {
+        val id = "1998078890498031979"
+        assertEquals(id, xPostId("https://x.com/NASA/status/$id"))
+        assertEquals(id, xPostId("https://x.com/NASA/status/$id?s=46&t=abc"))
+        assertEquals(id, xPostId("https://twitter.com/NASA/status/$id/video/1"))
+        assertEquals(id, xPostId("https://mobile.twitter.com/i/web/status/$id"))
+        assertEquals(id, xPostId("https://fxtwitter.com/NASA/status/$id"))
+        assertEquals(id, xPostId("Se denne! x.com/NASA/status/$id."))
+    }
+
+    @Test
+    fun otherLinksFromXAreNotPosts() {
+        assertTrue(EkkoLink.parse("https://x.com/NASA") is EkkoLink.Web)
+        assertTrue(EkkoLink.parse("https://x.com/NASA/status/abc") is EkkoLink.Web)
+        assertNull(EkkoLink.xPostId("https://example.com/NASA/status/123"))
+    }
+
+    @Test
+    fun xTokenMatchesWhatTheEmbedAddressAccepts() {
+        // Nøkler som den åpne adressen godtok for disse postene.
+        assertEquals("6dq1", EkkoLink.xToken("20"))
+        assertEquals("4ud5ecpecuhknlj", EkkoLink.xToken("1998078890498031979"))
+        val link = EkkoLink.parse("https://x.com/NASA/status/1998078890498031979") as EkkoLink.X
+        assertEquals(
+            "https://cdn.syndication.twimg.com/tweet-result?id=1998078890498031979&lang=no&token=4ud5ecpecuhknlj",
+            link.apiUrl,
+        )
+    }
 }

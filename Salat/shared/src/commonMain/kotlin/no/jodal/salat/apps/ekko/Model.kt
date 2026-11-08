@@ -68,6 +68,8 @@ enum class Repeat {
 @Serializable
 data class ImportedAudio(
     val title: String = "",
+    /** Hvem som la ut videoen, hvis kilden sier det. */
+    val artist: String = "",
     val durationSeconds: Double,
     val waveform: List<Float> = emptyList(),
 )

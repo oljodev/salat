@@ -18,7 +18,16 @@ final class EkkoImport: NSObject {
         start(clipId: clipId, listener: listener) { progress in
             let stream = try await EkkoYouTube.audioStream(videoId: videoId)
             let file = try await Self.download(stream.url, fileExtension: stream.fileExtension, progress: progress)
-            return (file, stream.title)
+            return (file, stream.title, "")
+        }
+    }
+
+    /// Videoen i en post på X. [apiUrl] er den åpne adressen innebygde poster bruker (se `EkkoLink.X` i Kotlin).
+    func x(clipId: String, apiUrl: String, listener: EkkoImportListener) {
+        start(clipId: clipId, listener: listener) { progress in
+            let post = try await Self.xVideo(apiUrl: apiUrl)
+            let file = try await Self.download(post.url, fileExtension: "mp4", progress: progress)
+            return (file, post.title, post.artist)
         }
     }
 
@@ -28,11 +37,11 @@ final class EkkoImport: NSObject {
             let ext = pageURL.pathExtension.lowercased()
             if ["mp4", "m4a", "mov", "mp3", "aac", "wav"].contains(ext) {
                 let file = try await Self.download(pageURL, fileExtension: ext, progress: progress)
-                return (file, pageURL.deletingPathExtension().lastPathComponent)
+                return (file, pageURL.deletingPathExtension().lastPathComponent, "")
             }
             let (videoURL, title) = try await Self.findVideo(onPage: pageURL)
             let file = try await Self.download(videoURL, fileExtension: "mp4", progress: progress)
-            return (file, title)
+            return (file, title, "")
         }
     }
 
@@ -72,7 +81,7 @@ final class EkkoImport: NSObject {
     private func start(
         clipId: String,
         listener: EkkoImportListener,
-        fetch: @escaping (_ progress: @escaping (Double) -> Void) async throws -> (URL, String)
+        fetch: @escaping (_ progress: @escaping (Double) -> Void) async throws -> (URL, String, String)
     ) {
         cancel()
         let current = generation
@@ -85,9 +94,9 @@ final class EkkoImport: NSObject {
         task = Task {
             var downloaded: URL?
             do {
-                let (file, title) = try await fetch { fraction in deliver { listener.onProgress(fraction: Float(fraction)) } }
+                let (file, title, artist) = try await fetch { fraction in deliver { listener.onProgress(fraction: Float(fraction)) } }
                 downloaded = file
-                let result = try await Self.save(source: file, clipId: clipId, title: title)
+                let result = try await Self.save(source: file, clipId: clipId, title: title, artist: artist)
                 try Task.checkCancellation()
                 deliver { listener.onImported(resultJson: result) }
             } catch {
@@ -161,6 +170,45 @@ final class EkkoImport: NSObject {
         throw EkkoError("Fant ingen video på siden. Lagre videoen på telefonen, og hent den fra Bilder i stedet.")
     }
 
+    /// Henter posten som JSON og finner videoen. Den minste mp4-en holder, siden det bare er lyden som brukes.
+    private static func xVideo(apiUrl: String) async throws -> (url: URL, title: String, artist: String) {
+        guard let url = URL(string: apiUrl) else { throw EkkoError("Lenken ser ikke riktig ut.") }
+        let (data, response) = try await URLSession.shared.data(from: url)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let notFound = EkkoError("Fant ikke posten. Den kan være slettet, eller kontoen kan være privat.")
+        if status == 404 { throw notFound }
+        guard status == 200, let post = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw EkkoError("Klarte ikke å hente posten fra X (\(status)). Prøv igjen litt senere.")
+        }
+        if (post["__typename"] as? String) == "TweetTombstone" { throw notFound }
+
+        // Helst en vanlig video. En «GIF» på X er en video uten lyd, og gir feilen «Videoen har ingen lyd».
+        let media = (post["mediaDetails"] as? [[String: Any]]) ?? []
+        let videos = media.filter { ($0["type"] as? String) == "video" } + media.filter { ($0["type"] as? String) == "animated_gif" }
+        let variants = videos.lazy.compactMap { ($0["video_info"] as? [String: Any])?["variants"] as? [[String: Any]] }.first ?? []
+        let mp4s: [(bitrate: Int, url: URL)] = variants.compactMap { variant in
+            guard (variant["content_type"] as? String) == "video/mp4",
+                  let address = variant["url"] as? String, let videoURL = URL(string: address) else { return nil }
+            return ((variant["bitrate"] as? Int) ?? 0, videoURL)
+        }
+        guard let smallest = mp4s.min(by: { $0.bitrate < $1.bitrate }) else {
+            throw EkkoError("Fant ingen video i posten.")
+        }
+
+        let user = post["user"] as? [String: Any]
+        let artist = (user?["name"] as? String) ?? (user?["screen_name"] as? String).map { "@\($0)" } ?? ""
+        return (smallest.url, xTitle(post["text"] as? String ?? ""), artist)
+    }
+
+    /// Første linje i teksten på posten, uten lenker, kortet ned så den passer som tittel.
+    private static func xTitle(_ text: String) -> String {
+        let withoutLinks = text.replacingOccurrences(of: #"https?://\S+"#, with: "", options: .regularExpression)
+        let line = withoutLinks.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+        return line.count > 60 ? String(line.prefix(59)).trimmingCharacters(in: .whitespaces) + "…" : line
+    }
+
     private static func firstMatch(_ pattern: String, in text: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
@@ -180,7 +228,7 @@ final class EkkoImport: NSObject {
     // MARK: Lagring
 
     /// Lagrer lyden fra [source] som `.m4a`, og gir tilbake en `ImportedAudio` som JSON.
-    private static func save(source: URL, clipId: String, title: String) async throws -> String {
+    private static func save(source: URL, clipId: String, title: String, artist: String) async throws -> String {
         let asset = AVURLAsset(url: source)
         let tracks = try await asset.loadTracks(withMediaType: .audio)
         guard !tracks.isEmpty else {
@@ -201,6 +249,7 @@ final class EkkoImport: NSObject {
         let waveform = (try? await Self.waveform(of: saved, bars: bars)) ?? []
         let json: [String: Any] = [
             "title": title,
+            "artist": artist,
             "durationSeconds": duration,
             "waveform": waveform.map { (Double($0) * 100).rounded() / 100 },
         ]
@@ -281,7 +330,10 @@ final class EkkoImport: NSObject {
     private func importPicked(_ fetch: @escaping () async throws -> (URL, String)) {
         guard let picked = picking else { return }
         picking = nil
-        start(clipId: picked.clipId, listener: picked.listener) { _ in try await fetch() }
+        start(clipId: picked.clipId, listener: picked.listener) { _ in
+            let (file, title) = try await fetch()
+            return (file, title, "")
+        }
     }
 
     private func pickingCancelled() {
