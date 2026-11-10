@@ -70,6 +70,8 @@ fun GuideScreen(bridge: NativeBridge, store: BremsStore, onBack: () -> Unit) {
                     "Velg **App**. Trykk **Velg** og huk av appene du vil bremse, f.eks. Snapchat og YouTube.",
                     "Huk av **Er åpnet**, og ta bort **Er lukket**. Velg **Kjør umiddelbart** og trykk **Neste**.",
                     "Velg **Ny tom automatisering**, søk etter **Brems** og legg til **Brems: App åpnet**.",
+                    "Legg til **Hvis** under. Velg **Resultat av Brems: App åpnet** som inndata, **er** som betingelse, og skriv **Pause**.",
+                    "Legg til **Åpne URL-er** inne i Hvis, og skriv **salat://brems/pause**. Da åpnes nedtellingen med en gang.",
                 ),
             )
         }

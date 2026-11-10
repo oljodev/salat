@@ -69,14 +69,21 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Et varsel fra Brems med en gang, med en lenke til pausen.
-    func sendBremsNow(title: String, body: String) {
+    /// Et varsel fra Brems med en lenke til pausen, med en gang eller etter [afterSeconds].
+    func sendBremsNow(title: String, body: String, afterSeconds: TimeInterval = 0) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         content.userInfo = ["link": "salat://brems/pause"]
-        center.add(UNNotificationRequest(identifier: "brems.now", content: content, trigger: nil))
+        let trigger = afterSeconds > 0 ? UNTimeIntervalNotificationTrigger(timeInterval: afterSeconds, repeats: false) : nil
+        center.add(UNNotificationRequest(identifier: "brems.now", content: content, trigger: trigger))
+    }
+
+    /// Salat er framme, så varselet om pausen trengs ikke lenger.
+    func cancelBremsNow() {
+        center.removePendingNotificationRequests(withIdentifiers: ["brems.now"])
+        center.removeDeliveredNotifications(withIdentifiers: ["brems.now"])
     }
 
     /// Trykker man på et varsel med en lenke, åpnes den.
