@@ -10,8 +10,7 @@ import UIKit
 struct BremsOpenedIntent: AppIntent {
     static let title: LocalizedStringResource = "Brems: App åpnet"
     static let description = IntentDescription(
-        "Legg denne i en automasjon som kjører når en app åpnes. Gir «Pause» når det er tid for en pause. " +
-            "Legg til «Hvis» etterpå, og åpne salat://brems/pause når svaret er «Pause»."
+        "Legg denne i en automasjon som kjører når en app åpnes. Gir «Pause» når det er tid for en pause. Legg til «Hvis» etterpå, og åpne salat://brems/pause når svaret er «Pause»."
     )
     static let supportedModes: IntentModes = [.background]
 
