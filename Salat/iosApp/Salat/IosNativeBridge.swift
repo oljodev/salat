@@ -235,6 +235,10 @@ final class IosNativeBridge: NSObject, NativeBridge {
         Notifications.shared.scheduleBrems(noticesJson)
     }
 
+    func kursNotify(noticesJson: String) {
+        Notifications.shared.scheduleKurs(noticesJson)
+    }
+
     func haptic(kind: String) {
         switch kind {
         case "selection": UISelectionFeedbackGenerator().selectionChanged()

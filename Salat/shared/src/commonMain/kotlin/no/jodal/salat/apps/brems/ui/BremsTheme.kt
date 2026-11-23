@@ -133,8 +133,18 @@ private fun bremsTypography(): Typography {
 }
 
 @Composable
-fun BremsTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val c = if (dark) Dark else Light
+fun BremsTheme(
+    dark: Boolean = isSystemInDarkTheme(),
+    /** En annen aksentfarge, for mini-apper som låner Brems sitt utseende. */
+    accent: Color? = null,
+    content: @Composable () -> Unit,
+) {
+    val base = if (dark) Dark else Light
+    val c = if (accent == null) {
+        base
+    } else {
+        base.copy(accent = accent, accentSoft = accent.copy(alpha = if (dark) 0.2f else 0.12f), onAccent = Color.White)
+    }
     val scheme = if (dark) {
         darkColorScheme(primary = c.accent, onPrimary = c.onAccent, background = c.background, surface = c.background, onSurface = c.text, error = c.warn)
     } else {

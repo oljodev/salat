@@ -7,6 +7,7 @@ import no.jodal.salat.apps.Brems
 import no.jodal.salat.apps.Ekko
 import no.jodal.salat.apps.Fornyelse
 import no.jodal.salat.apps.Kompis
+import no.jodal.salat.apps.Kurs
 import no.jodal.salat.apps.Rise
 import no.jodal.salat.apps.Varseltest
 import org.jetbrains.compose.resources.DrawableResource
@@ -53,6 +54,7 @@ val miniApps = listOf(
     Kompis,
     Ekko,
     Brems,
+    Kurs,
     Fornyelse,
     Varseltest,
 )

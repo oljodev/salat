@@ -207,6 +207,12 @@ interface NativeBridge {
      */
     fun bremsNotify(noticesJson: String)
 
+    /**
+     * Erstatter varslene fra Kurs med [noticesJson], en liste av `KursNotice` med klokkeslett i telefonens
+     * tidssone. En tom liste fjerner dem.
+     */
+    fun kursNotify(noticesJson: String)
+
     /** En liten vibrasjon: `light`, `selection`, `rigid`, `success` eller `warning`. */
     fun haptic(kind: String)
 }

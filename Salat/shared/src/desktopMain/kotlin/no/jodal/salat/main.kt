@@ -206,4 +206,5 @@ private object PreviewBridge : NativeBridge {
     override fun openUrl(url: String) = println("Forhåndsvisning: åpner $url")
 
     override fun bremsNotify(noticesJson: String) = println("Forhåndsvisning: Brems-varsler $noticesJson")
+    override fun kursNotify(noticesJson: String) = println("Forhåndsvisning: Kurs-varsler $noticesJson")
 }

@@ -180,4 +180,10 @@ internal object FakeBridge : NativeBridge {
     override fun bremsNotify(noticesJson: String) {
         bremsNotices = noticesJson
     }
+
+    var kursNotices: String? = null
+
+    override fun kursNotify(noticesJson: String) {
+        kursNotices = noticesJson
+    }
 }

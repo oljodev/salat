@@ -86,6 +86,37 @@ final class Notifications: NSObject, UNUserNotificationCenterDelegate {
         center.removeDeliveredNotifications(withIdentifiers: ["brems.now"])
     }
 
+    /// Erstatter varslene fra Kurs. Klokkeslettene er som `2026-11-23T21:45`, i telefonens tidssone.
+    func scheduleKurs(_ json: String) {
+        struct Notice: Decodable {
+            let title: String
+            let body: String
+            let at: String
+            let link: String?
+        }
+        let notices = (try? JSONDecoder().decode([Notice].self, from: Data(json.utf8))) ?? []
+        center.getPendingNotificationRequests { requests in
+            let old = requests.map(\.identifier).filter { $0.hasPrefix("kurs.") }
+            self.center.removePendingNotificationRequests(withIdentifiers: old)
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = .current
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+            for (index, notice) in notices.enumerated() {
+                guard let date = formatter.date(from: notice.at) else { continue }
+                let content = UNMutableNotificationContent()
+                content.title = notice.title
+                content.body = notice.body
+                content.sound = .default
+                // Uten lenke åpner varselet Kurs.
+                content.userInfo = ["link": notice.link ?? "salat://kurs/logg"]
+                let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+                self.center.add(UNNotificationRequest(identifier: "kurs.\(index)", content: content, trigger: trigger))
+            }
+        }
+    }
+
     /// Trykker man på et varsel med en lenke, åpnes den.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
