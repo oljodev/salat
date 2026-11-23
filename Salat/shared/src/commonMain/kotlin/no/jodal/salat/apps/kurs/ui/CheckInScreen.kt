@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,7 +36,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.DatePeriod
@@ -74,13 +79,16 @@ fun CheckInScreen(store: KursStore, initialDate: LocalDate, onBack: () -> Unit, 
         log = store.log(other) ?: store.prefill(other)
     }
 
-    Column(Modifier.fillMaxSize().background(palette.background)) {
+    val focus = LocalFocusManager.current
+    // imePadding på hele siden, så Lagre-knappen ligger over tastaturet.
+    Column(Modifier.fillMaxSize().background(palette.background).imePadding()) {
         Column(
             modifier = Modifier
                 .weight(1f)
+                // Et trykk utenfor et tekstfelt lukker tastaturet.
+                .pointerInput(Unit) { detectTapGestures { focus.clearFocus() } }
                 .verticalScroll(rememberScrollState())
                 .statusBarsPadding()
-                .imePadding()
                 .padding(horizontal = 16.dp),
         ) {
             NavBar("Kurs", onBack)
@@ -213,6 +221,7 @@ fun CheckInScreen(store: KursStore, initialDate: LocalDate, onBack: () -> Unit, 
             PrimaryButton(
                 if (existing) "Lagre endringer" else "Lagre",
                 onClick = {
+                    focus.clearFocus()
                     Haptics.success()
                     store.save(log.copy(date = date))
                     onSaved(date)
@@ -301,12 +310,14 @@ private fun SmallButton(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun WinField(value: String, onChange: (String) -> Unit) {
+    val focus = LocalFocusManager.current
     BasicTextField(
         value = value,
         onValueChange = { onChange(it.replace('\n', ' ').take(MaxWinLength)) },
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = palette.text),
         cursorBrush = SolidColor(KursAccent),
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
