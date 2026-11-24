@@ -44,8 +44,31 @@ object BremsRules {
         var d = endActive(data, now).let { it.copy(opens = it.opens + OpenEvent(name, now)) }
         if (!d.settings.enabled) return startSession(d, name, now) to Decision.Go
 
+        // En hard sperre går foran alt annet, også «Fortsett» og pauser som er ferdige.
+        val block = d.blockFor(name, now, zone)
+        if (block != null) {
+            val same = d.pauses.lastOrNull()?.takeIf {
+                it.outcome == null && it.kind == PauseKind.Block && it.app == name && it.untilMillis == block.untilMillis
+            }
+            if (same != null) return d to Decision.Wait(same)
+            val pause = Pause(
+                id = "p$now",
+                app = name,
+                kind = PauseKind.Block,
+                startMillis = now,
+                untilMillis = block.untilMillis,
+                quote = d.settings.quotes.takeIf { d.settings.showQuote && it.isNotEmpty() }?.random(random),
+                blockReason = block.reason,
+            )
+            val resolved = resolve(d, PauseOutcome.Stopped)
+            return resolved.copy(pauses = resolved.pauses + pause, pass = null) to Decision.Wait(pause)
+        }
+
         val current = d.pauses.lastOrNull()
-        if (current != null && current.outcome == null) {
+        if (current != null && current.outcome == null && current.kind == PauseKind.Block) {
+            // Sperren gjelder ikke denne appen, eller den er over.
+            d = resolve(d, PauseOutcome.Stopped)
+        } else if (current != null && current.outcome == null) {
             // Pausen pågår fortsatt, uansett hvilken app man prøver å åpne.
             if (now < current.untilMillis) return d to Decision.Wait(current)
             // Pausen er over, men man gikk rett tilbake uten å trykke på noe.
@@ -72,6 +95,12 @@ object BremsRules {
             quote = quote,
         )
         return d.copy(pauses = d.pauses + pause, pass = null) to Decision.Wait(pause)
+    }
+
+    /** Sperrer alle appene i [minutes] minutter. En sperre som varer lenger, beholdes. */
+    fun block(data: BremsData, minutes: Int, now: Long): BremsData {
+        val until = now + minutes.coerceAtLeast(0) * 60_000L
+        return data.copy(blockUntilMillis = maxOf(until, data.blockUntilMillis ?: 0L).takeIf { it > now })
     }
 
     fun closed(data: BremsData, now: Long): BremsData {

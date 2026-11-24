@@ -17,6 +17,8 @@ data class BremsData(
     /** Det siste som har skjedd, så man kan se at automasjonene virker. Nyeste sist. */
     val log: List<LogEntry> = emptyList(),
     val goals: List<Goal> = emptyList(),
+    /** Alle appene er sperret til da, fordi Snarveier sa «Sperr». Kan ikke oppheves. */
+    val blockUntilMillis: Long? = null,
 )
 
 @Serializable
@@ -41,6 +43,16 @@ data class BremsSettings(
     val showQuote: Boolean = true,
     val quotes: List<String> = DefaultQuotes,
     val reasons: List<String> = DefaultReasons,
+    /** Appene er sperret om kvelden og natta. */
+    val bedtime: Bedtime = Bedtime(),
+)
+
+/** Sperretid fra [fromMinute] til [toMinute], i minutter etter midnatt. Går over midnatt når [fromMinute] er størst. */
+@Serializable
+data class Bedtime(
+    val enabled: Boolean = false,
+    val fromMinute: Int = 22 * 60,
+    val toMinute: Int = 7 * 60,
 )
 
 val DefaultQuotes = listOf(
@@ -77,6 +89,22 @@ enum class PauseKind {
 
     /** Den lange pausen når dagens mål for appen er nådd. */
     Goal,
+
+    /** En hard sperre. Den kan ikke ventes ut, bare tas til den er over. */
+    Block,
+}
+
+/** Hvorfor appene er sperret. */
+@Serializable
+enum class BlockReason {
+    /** Et mål med hard grense er nådd, så appen er sperret resten av dagen. */
+    Goal,
+
+    /** Sengetid. */
+    Bedtime,
+
+    /** Snarveier sa «Sperr». */
+    Manual,
 }
 
 @Serializable
@@ -98,6 +126,8 @@ data class Pause(
     val quote: String? = null,
     val why: String? = null,
     val outcome: PauseOutcome? = null,
+    /** Hvorfor, når [kind] er [PauseKind.Block]. */
+    val blockReason: BlockReason? = null,
 )
 
 /** Navnet appene får når automasjonen i Snarveier ikke sier hvilken app det er. */

@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.DoNotTouch
 import androidx.compose.material.icons.rounded.Flag
@@ -67,6 +68,9 @@ import no.jodal.salat.NativeBridge
 import no.jodal.salat.apps.brems.BremsSettings
 import no.jodal.salat.apps.brems.BremsStore
 import no.jodal.salat.apps.brems.DayUsage
+import no.jodal.salat.apps.brems.PauseKind
+import no.jodal.salat.apps.brems.formatClock
+import no.jodal.salat.apps.brems.formatUntil
 import no.jodal.salat.apps.brems.appName
 import no.jodal.salat.apps.brems.formatDay
 import no.jodal.salat.apps.brems.formatDuration
@@ -181,7 +185,11 @@ private fun Home(store: BremsStore, onBack: () -> Unit, onOpen: (BremsDestinatio
         }
 
         if (pause != null) {
-            PauseBanner(appName(pause.app), (pause.untilMillis - now + 999) / 1000) { onOpen(BremsDestination.Pause) }
+            if (pause.kind == PauseKind.Block) {
+                PauseBanner("Sperret", "Til ${formatUntil(pause.untilMillis, now, zone)}", formatDuration(pause.untilMillis - now + 59_999)) { onOpen(BremsDestination.Pause) }
+            } else {
+                PauseBanner("Pause pågår", "Før ${appName(pause.app)}", "${(pause.untilMillis - now + 999) / 1000} s") { onOpen(BremsDestination.Pause) }
+            }
             Spacer(Modifier.height(16.dp))
         }
 
@@ -254,7 +262,7 @@ private fun Home(store: BremsStore, onBack: () -> Unit, onOpen: (BremsDestinatio
 }
 
 @Composable
-private fun PauseBanner(app: String, seconds: Long, onClick: () -> Unit) {
+private fun PauseBanner(title: String, subtitle: String, left: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -265,10 +273,10 @@ private fun PauseBanner(app: String, seconds: Long, onClick: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Pause pågår", style = MaterialTheme.typography.titleMedium, color = Dusk.Text)
-            Text("Før $app", style = MaterialTheme.typography.bodySmall, color = Dusk.TextDim)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = Dusk.Text)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Dusk.TextDim)
         }
-        Text("$seconds s", style = MaterialTheme.typography.headlineSmall, color = Dusk.Text)
+        Text(left, style = MaterialTheme.typography.headlineSmall, color = Dusk.Text)
         Icon(
             Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
@@ -397,7 +405,7 @@ private fun SetupCard(onClick: () -> Unit) {
             IconTile(Icons.Rounded.Bolt, palette.accent, size = 40.dp)
             Column(Modifier.weight(1f)) {
                 Text("Koble til Snarveier", style = MaterialTheme.typography.titleMedium, color = palette.text)
-                Text("Brems trenger to automasjoner. Det tar et par minutter.", style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+                Text("Én handling i én automasjon. Tar et minutt.", style = MaterialTheme.typography.bodySmall, color = palette.textDim)
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -422,6 +430,16 @@ private fun Rules(settings: BremsSettings, onClick: () -> Unit) {
         ListRow("Grense per økt", Icons.Rounded.HourglassBottom, TileColors.Pink, value = minutes(settings.limitMinutes), chevron = true, onClick = onClick)
         RowDivider()
         ListRow("Grensepause", Icons.Rounded.SelfImprovement, TileColors.Teal, value = seconds(settings.limitPauseSeconds), chevron = true, onClick = onClick)
+        RowDivider()
+        val bedtime = settings.bedtime
+        ListRow(
+            "Sengetid",
+            Icons.Rounded.Bedtime,
+            TileColors.Blue,
+            value = if (bedtime.enabled) "${formatClock(bedtime.fromMinute)}–${formatClock(bedtime.toMinute)}" else "Av",
+            chevron = true,
+            onClick = onClick,
+        )
     }
 }
 

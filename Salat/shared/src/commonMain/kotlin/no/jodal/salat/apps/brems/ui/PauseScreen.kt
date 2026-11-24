@@ -57,7 +57,10 @@ import kotlinx.datetime.TimeZone
 import no.jodal.salat.Haptics
 import no.jodal.salat.apps.brems.BremsStore
 import no.jodal.salat.apps.brems.Pause
+import no.jodal.salat.apps.brems.BlockReason
 import no.jodal.salat.apps.brems.PauseKind
+import no.jodal.salat.apps.brems.appliesTo
+import no.jodal.salat.apps.brems.describeBlock
 import no.jodal.salat.apps.brems.appName
 import no.jodal.salat.apps.brems.appUrl
 import no.jodal.salat.apps.brems.formatDuration
@@ -186,6 +189,7 @@ private fun Waiting(store: BremsStore, pause: Pause, now: Long, remainingMillis:
     val done = remainingMillis == 0L
     val name = appName(pause.app)
     val phase = ((now - pause.startMillis) % (BreathMillis * 2)).toFloat() / (BreathMillis * 2)
+    val blocked = pause.kind == PauseKind.Block && !done
     val breathing = settings.breathing && !done
     val breath = if (breathing) ((1 - cos(phase * 2 * PI)) / 2).toFloat() else 0.5f
 
@@ -195,8 +199,12 @@ private fun Waiting(store: BremsStore, pause: Pause, now: Long, remainingMillis:
             Box(Modifier.size(270.dp)) { Orb(breath = breath, scale = 1f) }
             Crossfade(targetState = done, animationSpec = tween(600)) { finished ->
                 Text(
-                    if (finished) "Klar" else "${(remainingMillis + 999) / 1000}",
-                    style = if (finished) {
+                    when {
+                        finished -> "Klar"
+                        blocked -> blockLeft(remainingMillis)
+                        else -> "${(remainingMillis + 999) / 1000}"
+                    },
+                    style = if (finished || blocked) {
                         MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Light)
                     } else {
                         MaterialTheme.typography.displayLarge.copy(fontSize = 88.sp)
@@ -222,6 +230,9 @@ private fun Waiting(store: BremsStore, pause: Pause, now: Long, remainingMillis:
                 val streak = store.data.goalStatus(goal, now, zone).bestStreak
                 "Du har brukt opp ${formatMinutes(goal.minutesPerDay)} for i dag." + if (streak > 1) " Beste rekke: $streak dager." else ""
             }
+            PauseKind.Block -> store.data.goals.takeIf { pause.blockReason == BlockReason.Goal }
+                ?.let { goals -> goals.filter { it.hard && it.appliesTo(pause.app) }.minByOrNull { it.minutesPerDay } }
+                .let { goal -> describeBlock(pause.blockReason, pause.untilMillis, goal, pause.app, now, zone) }
             PauseKind.Open -> null
         }
         if (reason != null) {
@@ -257,9 +268,15 @@ private fun Waiting(store: BremsStore, pause: Pause, now: Long, remainingMillis:
         AnimatedContent(
             targetState = done,
             transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(200)) },
+            contentKey = { if (blocked) "blocked" else it },
             modifier = Modifier.fillMaxWidth().height(124.dp),
         ) { finished ->
-            if (finished) {
+            if (blocked) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    WhiteButton("Jeg er ferdig", onStop)
+                    Text("Sperren kan ikke oppheves. Åpner du $name, kommer du hit igjen.", style = MaterialTheme.typography.bodySmall, color = Night.Faint)
+                }
+            } else if (finished) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     WhiteButton("Jeg er ferdig", onStop)
                     OutlineButton("Fortsett til $name", onContinue)
@@ -388,6 +405,12 @@ private fun Ending(title: String, body: String, onDone: () -> Unit) {
         Spacer(Modifier.height(32.dp))
         Box(Modifier.padding(bottom = 24.dp)) { WhiteButton("Ferdig", onDone) }
     }
+}
+
+/** Tiden igjen av en sperre: «2 t 14 min», «45 min», «30 s». */
+private fun blockLeft(millis: Long): String = when {
+    millis < 60_000 -> "${(millis + 999) / 1000} s"
+    else -> formatDuration(millis + 59_999)
 }
 
 private fun stoppedText(store: BremsStore): String {

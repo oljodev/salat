@@ -31,9 +31,11 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
         if (next.active != before) scheduleNotices()
         val name = appName(app.orEmpty()).replaceFirstChar { it.uppercase() }
         log(
-            when (decision) {
-                is Decision.Wait -> "$name åpnet: pause, ${(decision.pause.untilMillis - now + 999) / 1000} s igjen"
-                Decision.Go -> "$name åpnet: fri"
+            when {
+                decision !is Decision.Wait -> "$name åpnet: fri"
+                decision.pause.kind == PauseKind.Block ->
+                    "$name åpnet: sperret til ${formatUntil(decision.pause.untilMillis, now, TimeZone.currentSystemDefault())}"
+                else -> "$name åpnet: pause, ${(decision.pause.untilMillis - now + 999) / 1000} s igjen"
             },
         )
         return decision is Decision.Wait
@@ -51,6 +53,30 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
             log("Lukket")
         }
     }
+
+    /** Sperrer alle appene i [minutes] minutter, fra Snarveier. Kan ikke oppheves. */
+    fun block(minutes: Int) {
+        val now = nowMillis()
+        update { BremsRules.block(it, minutes, now) }
+        val until = data.blockUntilMillis
+        log(if (until != null) "Sperret til ${formatUntil(until, now, TimeZone.currentSystemDefault())}" else "Sperr: 0 minutter, ingenting skjedde")
+        scheduleNotices()
+    }
+
+    /** «Sperret», «Pause» eller «Fri» for [app], uten å telle det som en åpning. */
+    fun status(app: String?): String {
+        val now = nowMillis()
+        val name = app?.trim().orEmpty()
+        return when {
+            !data.settings.enabled -> "Av"
+            data.blockFor(name, now, TimeZone.currentSystemDefault()) != null -> "Sperret"
+            currentPause()?.let { now < it.untilMillis } == true -> "Pause"
+            else -> "Fri"
+        }
+    }
+
+    /** Om en sperre gjelder nå, så Brems og sperrene ikke kan skrus av. */
+    fun locked(): Boolean = data.anyBlock(nowMillis(), TimeZone.currentSystemDefault())
 
     /** Salat er åpnet, så appen som var åpen er forlatt. Avslutter økta og fjerner varslene. */
     fun salatOpened() {
@@ -86,17 +112,33 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
             val session = BremsRules.notifications(data.settings, active.app).map {
                 ScheduledNotice(it.title, it.body, active.startMillis + it.minutes * 60_000L)
             }
-            // Et varsel når dagens mål for appen nås, hvis det skjer i denne økta.
-            val goals = data.goals.filter { it.appliesTo(active.app) }.mapNotNull { goal ->
+            // Et varsel når dagens mål for appen nås, hvis det skjer i denne økta. En hard grense maser litt etterpå.
+            val goals = data.goals.filter { it.appliesTo(active.app) }.flatMap { goal ->
                 val left = goal.minutesPerDay * 60_000L - data.goalMillis(goal, today(now, zone), now, zone)
-                if (left <= 0) return@mapNotNull null
-                ScheduledNotice(
-                    if (goal.app.isEmpty()) "Dagens mål er nådd" else "Målet for ${goal.app} er nådd",
-                    "Du har brukt ${formatMinutes(goal.minutesPerDay)} i dag. Lukk appen for å holde rekka.",
-                    now + left,
-                )
+                if (left <= 0) return@flatMap emptyList()
+                val label = if (goal.app.isEmpty()) "appene" else goal.app
+                if (goal.hard) {
+                    listOf(ScheduledNotice("Tiden er ute", "${formatMinutes(goal.minutesPerDay).replaceFirstChar { it.uppercase() }} er brukt. $label er sperret resten av dagen. Lukk appen nå.", now + left)) +
+                        HardNagMinutes.map { ScheduledNotice("Lukk ${appName(active.app)}", "$label er sperret resten av dagen.", now + left + it * 60_000L) }
+                } else {
+                    listOf(
+                        ScheduledNotice(
+                            if (goal.app.isEmpty()) "Dagens mål er nådd" else "Målet for ${goal.app} er nådd",
+                            "Du har brukt ${formatMinutes(goal.minutesPerDay)} i dag. Lukk appen for å holde rekka.",
+                            now + left,
+                        ),
+                    )
+                }
             }
-            (session + goals).sortedBy { it.atMillis }
+            // Begynner sengetida mens appen er åpen, eller en sperre fra Snarveier, sier Brems fra.
+            val bedtime = bedtimeStart(data.settings.bedtime, now, zone)?.takeIf { it - now < BremsRules.MaxSessionMillis }?.let { at ->
+                listOf(ScheduledNotice("Sengetid", "Appene er sperret til kl. ${formatClock(data.settings.bedtime.toMinute)}. Legg fra deg telefonen.", at)) +
+                    HardNagMinutes.map { ScheduledNotice("Sengetid", "Lukk ${appName(active.app)} og legg fra deg telefonen.", at + it * 60_000L) }
+            }.orEmpty()
+            val manual = data.blockUntilMillis?.takeIf { it > now }?.let {
+                listOf(ScheduledNotice("Appene er sperret", "Lukk ${appName(active.app)}. Sperret til ${formatUntil(it, now, zone)}.", now + 1_000))
+            }.orEmpty()
+            (session + goals + bedtime + manual).sortedBy { it.atMillis }
         }
         bridge.bremsNotify(json.encodeToString(ListSerializer(ScheduledNotice.serializer()), notices))
     }
@@ -120,6 +162,9 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
     companion object {
         private const val StorageKey = "brems.data"
         private const val LogSize = 40
+
+        /** Ekstra varsler etter at en hard grense er nådd, i minutter. */
+        private val HardNagMinutes = listOf(1, 3, 5)
         private val json = Json { ignoreUnknownKeys = true }
         private var instance: BremsStore? = null
 
@@ -136,6 +181,12 @@ fun bremsSalatOpened(bridge: NativeBridge) = BremsStore.get(bridge).salatOpened(
 
 /** Kalles fra Snarveier når en app åpnes. Gir `true` hvis Brems skal åpnes og vise en pause. */
 fun bremsOpened(bridge: NativeBridge, app: String?): Boolean = BremsStore.get(bridge).opened(app)
+
+/** Kalles fra Snarveier for å sperre alle appene i [minutes] minutter. */
+fun bremsBlock(bridge: NativeBridge, minutes: Int) = BremsStore.get(bridge).block(minutes)
+
+/** Kalles fra Snarveier: «Sperret», «Pause», «Fri» eller «Av». */
+fun bremsStatus(bridge: NativeBridge, app: String?): String = BremsStore.get(bridge).status(app)
 
 /** Kalles fra Snarveier når en app lukkes. */
 fun bremsClosed(bridge: NativeBridge) = BremsStore.get(bridge).closed()

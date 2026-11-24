@@ -22,6 +22,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddCircle
 import androidx.compose.material.icons.rounded.Air
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.HourglassBottom
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.QuestionMark
 import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
@@ -53,6 +56,10 @@ import no.jodal.salat.Haptics
 import no.jodal.salat.apps.brems.BremsStore
 import no.jodal.salat.apps.brems.DefaultQuotes
 import no.jodal.salat.apps.brems.DefaultReasons
+import no.jodal.salat.apps.brems.bedtimeEnd
+import no.jodal.salat.apps.brems.formatClock
+import no.jodal.salat.apps.brems.formatUntil
+import kotlinx.datetime.TimeZone
 import no.jodal.salat.ui.pressable
 
 private val OpenPauseSteps = listOf(0, 5, 10, 15, 20, 30, 45, 60)
@@ -63,6 +70,10 @@ private val LimitPauseSteps = listOf(15, 30, 45, 60, 90, 120, 180, 300, 600)
 @Composable
 fun SettingsScreen(store: BremsStore, onBack: () -> Unit) {
     val settings = store.data.settings
+    // Mens en sperre gjelder, kan verken Brems eller sperrene skrus av. Ellers er de ikke harde.
+    val locked = store.locked()
+    val zone = TimeZone.currentSystemDefault()
+    val now = store.nowMillis()
     Column(
         Modifier
             .fillMaxSize()
@@ -77,10 +88,35 @@ fun SettingsScreen(store: BremsStore, onBack: () -> Unit) {
 
         Card {
             ListRow("Brems er på", Icons.Rounded.PowerSettingsNew, TileColors.Teal, trailing = {
-                Switch(settings.enabled) { on -> store.updateSettings { it.copy(enabled = on) } }
+                Switch(settings.enabled) { on -> if (!locked) store.updateSettings { it.copy(enabled = on) } }
             })
         }
-        Footnote("Skru av for å slippe pauser og varsler en stund.")
+        Footnote(if (locked) "En sperre gjelder nå, så Brems kan ikke skrus av før den er over." else "Skru av for å slippe pauser og varsler en stund.")
+
+        Section("Harde grenser")
+        val bedtime = settings.bedtime
+        val bedtimeNow = bedtimeEnd(bedtime, now, zone) != null
+        Card {
+            ToggleRow("Sengetid", Icons.Rounded.Bedtime, TileColors.Blue, bedtime.enabled) { on ->
+                if (!bedtimeNow) store.updateSettings { it.copy(bedtime = it.bedtime.copy(enabled = on)) }
+            }
+            if (bedtime.enabled) {
+                RowDivider()
+                ClockRow("Fra", bedtime.fromMinute, enabled = !bedtimeNow) { v -> store.updateSettings { it.copy(bedtime = it.bedtime.copy(fromMinute = v)) } }
+                RowDivider()
+                ClockRow("Til", bedtime.toMinute, enabled = !bedtimeNow) { v -> store.updateSettings { it.copy(bedtime = it.bedtime.copy(toMinute = v)) } }
+            }
+            val until = store.data.blockUntilMillis?.takeIf { it > now }
+            if (until != null) {
+                RowDivider()
+                ListRow("Sperret fra Snarveier", Icons.Rounded.Lock, TileColors.Pink, value = formatUntil(until, now, zone).replaceFirstChar { it.uppercase() })
+            }
+        }
+        Footnote(
+            "Under en sperre sender Brems deg rett hit hver gang du åpner en av appene, og det er ingen knapp for å fortsette. " +
+                "Sperrer kan ikke skrus av mens de gjelder. Mål kan også ha hard grense, og handlingen Brems i Snarveier kan sperre appene en stund." +
+                if (bedtimeNow) " Det er sengetid nå, så den kan ikke endres før kl. ${formatClock(bedtime.toMinute)}." else "",
+        )
 
         Section("Pauser og grenser")
         Card {
@@ -172,6 +208,20 @@ private fun StepRow(
             onPlus = { onChange(steps[(if (steps[index] == value) index + 1 else index).coerceAtMost(steps.lastIndex)]) },
             canMinus = value > steps.first(),
             canPlus = value < steps.last(),
+        )
+    })
+}
+
+/** Et klokkeslett som kan flyttes en halvtime om gangen. */
+@Composable
+private fun ClockRow(title: String, minute: Int, enabled: Boolean, onChange: (Int) -> Unit) {
+    ListRow(title, Icons.Rounded.Schedule, TileColors.Gray, trailing = {
+        Stepper(
+            value = formatClock(minute),
+            onMinus = { onChange((minute - 30).mod(24 * 60)) },
+            onPlus = { onChange((minute + 30).mod(24 * 60)) },
+            canMinus = enabled,
+            canPlus = enabled,
         )
     })
 }

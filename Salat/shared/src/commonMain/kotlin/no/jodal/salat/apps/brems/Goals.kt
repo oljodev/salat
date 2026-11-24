@@ -15,6 +15,8 @@ data class Goal(
     val minutesPerDay: Int,
     /** Dagen målet ble laget. Dager før det teller ikke. */
     val since: LocalDate,
+    /** Når målet er nådd, er appen sperret resten av dagen, i stedet for bare en lang pause. */
+    val hard: Boolean = false,
 )
 
 /** Hvordan det gikk med et mål én dag. */

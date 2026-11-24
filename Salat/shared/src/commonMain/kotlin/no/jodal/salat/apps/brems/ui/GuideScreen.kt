@@ -38,7 +38,7 @@ import no.jodal.salat.NativeBridge
 import no.jodal.salat.apps.brems.BremsStore
 import no.jodal.salat.apps.brems.appName
 
-/** Hvordan man lager automasjonene i Snarveier som forteller Brems når apper åpnes og lukkes. */
+/** Hvordan man lager automasjonene i Snarveier med handlingen Brems. */
 @Composable
 fun GuideScreen(bridge: NativeBridge, store: BremsStore, onBack: () -> Unit) {
     Column(
@@ -52,8 +52,8 @@ fun GuideScreen(bridge: NativeBridge, store: BremsStore, onBack: () -> Unit) {
         NavBar("Brems", onBack)
         Box(Modifier.padding(horizontal = 4.dp)) { LargeTitle("Oppsett") }
         Text(
-            "iOS lar ikke apper se hva du bruker telefonen til. Derfor sier Snarveier fra til Brems når en app åpnes og lukkes. " +
-                "Du lager to automasjoner, én gang.",
+            "Snarveier sier fra til Brems når en av appene åpnes. Skal appen vente eller er den sperret, " +
+                "hopper Salat fram med en gang. Alt annet stilles inn her i Brems.",
             style = MaterialTheme.typography.bodyLarge,
             color = palette.textDim,
             modifier = Modifier.padding(horizontal = 4.dp),
@@ -62,40 +62,41 @@ fun GuideScreen(bridge: NativeBridge, store: BremsStore, onBack: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         Status(store)
 
-        Section("1", "Når apper åpnes")
+        Section("1", "Når appene åpnes")
         Card(padding = 20.dp) {
             Steps(
                 listOf(
-                    "Åpne **Snarveier**, gå til **Automatisering** og trykk **+**.",
-                    "Velg **App**. Trykk **Velg** og huk av appene du vil bremse, f.eks. Snapchat og YouTube.",
-                    "Huk av **Er åpnet**, og ta bort **Er lukket**. Velg **Kjør umiddelbart** og trykk **Neste**.",
-                    "Velg **Ny tom automatisering**, søk etter **Brems** og legg til **Brems: App åpnet**.",
-                    "Legg til **Hvis** under. Velg **Resultat av Brems: App åpnet** som inndata, **er** som betingelse, og skriv **Pause**.",
-                    "Legg til **Åpne URL-er** inne i Hvis, og skriv **salat://brems/pause**. Da åpnes nedtellingen med en gang.",
+                    "I **Snarveier**, gå til **Automatisering** og trykk **+**.",
+                    "Velg **App**, trykk **Velg** og huk av appene, f.eks. Snapchat og TikTok. La **Er åpnet** stå. Velg **Kjør umiddelbart**.",
+                    "Trykk **Neste**, **Ny tom automatisering**, søk etter **Brems** og legg til **Brems**. Ferdig.",
                 ),
             )
         }
+        Footnote("Ikke legg til noe mer. Brems åpner Salat selv når det trengs.")
 
-        Section("2", "Når apper lukkes")
+        Section("2", "Når appene lukkes")
         Card(padding = 20.dp) {
             Steps(
                 listOf(
-                    "Lag en ny automasjon med **App** og de samme appene.",
-                    "Huk av **Er lukket**, og ta bort **Er åpnet**. Velg **Kjør umiddelbart**.",
-                    "Legg til **Brems: App lukket**.",
+                    "Lag en ny automasjon med **App** og de samme appene. Ta bort **Er åpnet** og huk av **Er lukket**.",
+                    "Legg til **Brems**, trykk på **Åpnet** i handlingen og velg **Lukket**.",
                 ),
             )
         }
+        Footnote("Slik vet Brems hvor lenge du var inne, som målene og grensene trenger.")
 
         Spacer(Modifier.height(20.dp))
         Card(padding = 20.dp) {
-            Text("Tid per app", style = MaterialTheme.typography.titleMedium, color = palette.text)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Snarveier sier ikke hvilken av appene som ble åpnet. Lag én åpnet-automasjon per app og skriv navnet i App-feltet " +
-                    "i handlingen, så ser du tiden per app. Da sender Brems deg også rett tilbake til appen etter pausen.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = palette.textDim,
+            Text("Mer du kan gjøre", style = MaterialTheme.typography.titleMedium, color = palette.text)
+            Spacer(Modifier.height(10.dp))
+            Bullets(
+                listOf(
+                    "**Tid per app:** Lag én automasjon per app og skriv navnet i **App**-feltet. Da får hver app egne mål, og etter pausen kommer du rett tilbake.",
+                    "**Sperr:** Velg **Sperr** i handlingen for å sperre alle appene i noen minutter. Legg den i en automasjon for et klokkeslett, " +
+                        "en fokusmodus eller når du kommer på jobb. Den kan ikke oppheves.",
+                    "**Status:** Gir **Sperret**, **Pause**, **Fri** eller **Av**, til å bruke videre i egne snarveier.",
+                    "**Gamle automasjoner** med **Hvis** og **Åpne URL-er** virker fortsatt, men kan byttes ut med bare **Brems**.",
+                ),
             )
         }
 
@@ -129,8 +130,18 @@ private fun Status(store: BremsStore) {
             title = if (last != null) "Brems hører fra Snarveier" else "Venter på Snarveier",
             icon = if (last != null) Icons.Rounded.CheckCircle else Icons.Rounded.HourglassEmpty,
             iconTint = if (last != null) TileColors.Teal else TileColors.Orange,
-            subtitle = if (last != null) "Sist: ${appName(last.app)} åpnet kl. ${clock(last.atMillis)}" else "Lag automasjonene, og åpne en av appene for å teste.",
+            subtitle = if (last != null) "Sist: ${appName(last.app)} åpnet kl. ${clock(last.atMillis)}" else "Lag automasjonen, og åpne en av appene for å teste.",
         )
+    }
+}
+
+@Composable
+private fun Bullets(items: List<String>) {
+    val accent = palette.accent
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        items.forEach { item ->
+            Text(item.bold(accent), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+        }
     }
 }
 

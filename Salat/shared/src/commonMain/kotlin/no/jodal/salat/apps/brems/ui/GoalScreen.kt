@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,6 +50,7 @@ import no.jodal.salat.apps.brems.DayResult
 import no.jodal.salat.apps.brems.Goal
 import no.jodal.salat.apps.brems.GoalStatus
 import no.jodal.salat.apps.brems.formatDuration
+import no.jodal.salat.apps.brems.hardGoalReached
 import no.jodal.salat.apps.brems.label
 import no.jodal.salat.apps.brems.today
 import no.jodal.salat.ui.pressable
@@ -69,7 +71,7 @@ fun GoalCard(status: GoalStatus, onClick: () -> Unit) {
             if (goal.app.isEmpty()) IconTile(Icons.Rounded.Apps, TileColors.Gray, size = 36.dp) else AppAvatar(goal.app)
             Column(Modifier.weight(1f)) {
                 Text(goal.label, style = MaterialTheme.typography.titleMedium, color = palette.text)
-                Text("Under ${goal.minutesPerDay} min om dagen", style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+                Text("Under ${goal.minutesPerDay} min om dagen" + if (goal.hard) "  ·  hard grense" else "", style = MaterialTheme.typography.bodySmall, color = palette.textDim)
             }
             Streak(status.streak)
         }
@@ -161,6 +163,9 @@ fun GoalScreen(store: BremsStore, goalId: String?, onBack: () -> Unit) {
     var app by remember { mutableStateOf(existing?.app ?: "") }
     var minutes by remember { mutableStateOf(existing?.minutesPerDay ?: 15) }
     var custom by remember { mutableStateOf("") }
+    var hard by remember { mutableStateOf(existing?.hard ?: false) }
+    // Et mål med hard grense som er nådd i dag, kan ikke endres før i morgen. Ellers er grensen ikke hard.
+    val locked = existing != null && store.data.hardGoalReached(existing, store.nowMillis(), TimeZone.currentSystemDefault())
     val choices = (CommonApps + store.knownApps() + listOfNotNull(existing?.app?.takeIf { it.isNotEmpty() }))
         .distinctBy { it.lowercase() }
 
@@ -229,8 +234,26 @@ fun GoalScreen(store: BremsStore, goalId: String?, onBack: () -> Unit) {
                 "Alle apper teller alt Brems følger med på.",
         )
 
+        Spacer(Modifier.height(28.dp))
+        Card {
+            ListRow(
+                "Hard grense",
+                Icons.Rounded.Lock,
+                TileColors.Pink,
+                subtitle = "Sperr appen resten av dagen når tiden er brukt opp",
+                trailing = { Switch(hard) { on -> if (!locked) hard = on } },
+            )
+        }
+        Footnote(
+            if (locked) {
+                "Målet er nådd og har hard grense, så det kan ikke endres eller slettes før i morgen."
+            } else {
+                "Uten hard grense får du en lang pause hver gang. Med hard grense er appen sperret til midnatt, uten knapp for å fortsette."
+            },
+        )
+
         Spacer(Modifier.height(32.dp))
-        PrimaryButton("Lagre", {
+        if (!locked) PrimaryButton("Lagre", {
             val zone = TimeZone.currentSystemDefault()
             store.saveGoal(
                 Goal(
@@ -238,12 +261,13 @@ fun GoalScreen(store: BremsStore, goalId: String?, onBack: () -> Unit) {
                     app = app.trim(),
                     minutesPerDay = minutes,
                     since = existing?.since ?: today(store.nowMillis(), zone),
+                    hard = hard,
                 ),
             )
             Haptics.success()
             onBack()
         })
-        if (existing != null) {
+        if (existing != null && !locked) {
             Text(
                 "Slett målet",
                 style = MaterialTheme.typography.titleMedium,
