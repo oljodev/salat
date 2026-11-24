@@ -27,7 +27,7 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
         val now = nowMillis()
         val before = data.active
         val (next, decision) = BremsRules.opened(BremsRules.trim(data, now), app, now)
-        update { next }
+        update { next.copy(foreground = true, lastEventMillis = now) }
         if (next.active != before) scheduleNotices()
         val name = appName(app.orEmpty()).replaceFirstChar { it.uppercase() }
         log(
@@ -44,7 +44,7 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
     fun closed() {
         val before = data.active
         val now = nowMillis()
-        update { BremsRules.closed(it, now) }
+        update { BremsRules.closed(it, now).copy(foreground = false, lastEventMillis = now) }
         val ended = before?.takeIf { data.active != it }
         if (ended != null) {
             scheduleNotices()
@@ -81,7 +81,15 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
     /** Salat er åpnet, så appen som var åpen er forlatt. Avslutter økta og fjerner varslene. */
     fun salatOpened() {
         if (data.active != null) closed()
+        if (data.foreground) update { it.copy(foreground = false) }
     }
+
+    /**
+     * En app ble åpnet eller lukket, fra en automasjon med begge deler huket av. Gir `true` hvis det var en
+     * åpning og Brems skal vise en pause.
+     */
+    fun event(app: String?, salatActive: Boolean): Boolean =
+        if (BremsRules.isOpening(data, nowMillis(), salatActive)) opened(app) else false.also { closed() }
 
     /** Skriver [text] i loggen. */
     fun log(text: String) = update { it.copy(log = (it.log + LogEntry(nowMillis(), text)).takeLast(LogSize)) }
@@ -181,6 +189,9 @@ fun bremsSalatOpened(bridge: NativeBridge) = BremsStore.get(bridge).salatOpened(
 
 /** Kalles fra Snarveier når en app åpnes. Gir `true` hvis Brems skal åpnes og vise en pause. */
 fun bremsOpened(bridge: NativeBridge, app: String?): Boolean = BremsStore.get(bridge).opened(app)
+
+/** Kalles fra Snarveier når en app åpnes eller lukkes, uten å vite hvilken. Gir `true` hvis det skal være pause. */
+fun bremsEvent(bridge: NativeBridge, app: String?, salatActive: Boolean): Boolean = BremsStore.get(bridge).event(app, salatActive)
 
 /** Kalles fra Snarveier for å sperre alle appene i [minutes] minutter. */
 fun bremsBlock(bridge: NativeBridge, minutes: Int) = BremsStore.get(bridge).block(minutes)

@@ -405,7 +405,7 @@ private fun SetupCard(onClick: () -> Unit) {
             IconTile(Icons.Rounded.Bolt, palette.accent, size = 40.dp)
             Column(Modifier.weight(1f)) {
                 Text("Koble til Snarveier", style = MaterialTheme.typography.titleMedium, color = palette.text)
-                Text("Én handling i én automasjon. Tar et minutt.", style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+                Text("Én automasjon med handlingen Brems. Tar et minutt.", style = MaterialTheme.typography.bodySmall, color = palette.textDim)
             }
         }
         Spacer(Modifier.height(16.dp))

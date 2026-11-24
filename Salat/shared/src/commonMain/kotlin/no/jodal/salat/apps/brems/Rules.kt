@@ -97,6 +97,17 @@ object BremsRules {
         return d.copy(pauses = d.pauses + pause, pass = null) to Decision.Wait(pause)
     }
 
+    /**
+     * Om en hendelse fra en automasjon med både «Er åpnet» og «Er lukket» er en åpning. Snarveier sier ikke
+     * hvilken det er, men for appene Brems følger med på, kommer de annenhver gang. Er Salat framme, er det
+     * appen man forlot som ble lukket. Har det gått over en time, har vi gått glipp av en lukking.
+     */
+    fun isOpening(data: BremsData, now: Long, salatActive: Boolean): Boolean = when {
+        salatActive -> false
+        !data.foreground -> true
+        else -> now - data.lastEventMillis > MaxSessionMillis
+    }
+
     /** Sperrer alle appene i [minutes] minutter. En sperre som varer lenger, beholdes. */
     fun block(data: BremsData, minutes: Int, now: Long): BremsData {
         val until = now + minutes.coerceAtLeast(0) * 60_000L

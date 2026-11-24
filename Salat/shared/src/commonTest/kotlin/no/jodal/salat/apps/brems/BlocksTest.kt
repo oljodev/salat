@@ -85,3 +85,27 @@ class BlocksTest {
         assertEquals(Decision.Go, open(data, "TikTok", at(22, 12, 30)).second)
     }
 }
+
+class OneAutomationTest {
+    private val min = 60_000L
+    private val start = 1_000_000_000L
+
+    @Test
+    fun eventsAlternateBetweenOpenedAndClosed() {
+        assertEquals(true, BremsRules.isOpening(BremsData(), start, salatActive = false))
+        val open = BremsData(foreground = true, lastEventMillis = start)
+        assertEquals(false, BremsRules.isOpening(open, start + 5 * min, salatActive = false))
+    }
+
+    @Test
+    fun anEventWhileSalatIsFrontIsTheAppThatWasLeft() {
+        // Pausen åpnet Salat, og så sier Snarveier at appen ble lukket. Da må det ikke bli en ny pause.
+        assertEquals(false, BremsRules.isOpening(BremsData(foreground = false), start, salatActive = true))
+    }
+
+    @Test
+    fun aMissedCloseIsForgottenAfterAnHour() {
+        val stale = BremsData(foreground = true, lastEventMillis = start)
+        assertEquals(true, BremsRules.isOpening(stale, start + 61 * min, salatActive = false))
+    }
+}

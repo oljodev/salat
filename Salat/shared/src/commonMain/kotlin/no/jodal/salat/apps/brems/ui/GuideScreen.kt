@@ -62,40 +62,34 @@ fun GuideScreen(bridge: NativeBridge, store: BremsStore, onBack: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         Status(store)
 
-        Section("1", "Når appene åpnes")
+        Section("1", "Én automasjon")
         Card(padding = 20.dp) {
             Steps(
                 listOf(
                     "I **Snarveier**, gå til **Automatisering** og trykk **+**.",
-                    "Velg **App**, trykk **Velg** og huk av appene, f.eks. Snapchat og TikTok. La **Er åpnet** stå. Velg **Kjør umiddelbart**.",
-                    "Trykk **Neste**, **Ny tom automatisering**, søk etter **Brems** og legg til **Brems**. Ferdig.",
+                    "Velg **App**, trykk **Velg** og huk av appene, f.eks. Snapchat og TikTok.",
+                    "Huk av både **Er åpnet** og **Er lukket**. Velg **Kjør umiddelbart** og trykk **Neste**.",
+                    "Velg **Ny tom automatisering**, søk etter **Brems** og legg til **Brems**. Ferdig.",
                 ),
             )
         }
-        Footnote("Ikke legg til noe mer. Brems åpner Salat selv når det trengs.")
-
-        Section("2", "Når appene lukkes")
-        Card(padding = 20.dp) {
-            Steps(
-                listOf(
-                    "Lag en ny automasjon med **App** og de samme appene. Ta bort **Er åpnet** og huk av **Er lukket**.",
-                    "Legg til **Brems**, trykk på **Åpnet** i handlingen og velg **Lukket**.",
-                ),
-            )
-        }
-        Footnote("Slik vet Brems hvor lenge du var inne, som målene og grensene trenger.")
+        Footnote(
+            "Det er alt. Brems finner selv ut om appen ble åpnet eller lukket, måler tiden, og åpner Salat når appen skal vente " +
+                "eller er sperret. Pauser, mål, sperrer og sengetid stilles inn her i Brems.",
+        )
 
         Spacer(Modifier.height(20.dp))
         Card(padding = 20.dp) {
-            Text("Mer du kan gjøre", style = MaterialTheme.typography.titleMedium, color = palette.text)
+            Text("Valgfritt", style = MaterialTheme.typography.titleMedium, color = palette.text)
             Spacer(Modifier.height(10.dp))
             Bullets(
                 listOf(
-                    "**Tid per app:** Lag én automasjon per app og skriv navnet i **App**-feltet. Da får hver app egne mål, og etter pausen kommer du rett tilbake.",
-                    "**Sperr:** Velg **Sperr** i handlingen for å sperre alle appene i noen minutter. Legg den i en automasjon for et klokkeslett, " +
+                    "**Mål per app:** Snarveier sier ikke hvilken app det var, så med én automasjon gjelder målene alle appene samlet. " +
+                        "Vil du ha mål for én app, ta den ut av automasjonen, lag en egen bare for den og skriv navnet i **App**-feltet.",
+                    "**Sperr:** Trykk på **Åpnet eller lukket** i handlingen og velg **Sperr** for å sperre alle appene i noen minutter. Legg den i en automasjon for et klokkeslett, " +
                         "en fokusmodus eller når du kommer på jobb. Den kan ikke oppheves.",
                     "**Status:** Gir **Sperret**, **Pause**, **Fri** eller **Av**, til å bruke videre i egne snarveier.",
-                    "**Gamle automasjoner** med **Hvis** og **Åpne URL-er** virker fortsatt, men kan byttes ut med bare **Brems**.",
+                    "**Gamle automasjoner:** Slett dem når den nye er laget, ellers teller Brems alt to ganger.",
                 ),
             )
         }

@@ -19,6 +19,10 @@ data class BremsData(
     val goals: List<Goal> = emptyList(),
     /** Alle appene er sperret til da, fordi Snarveier sa «Sperr». Kan ikke oppheves. */
     val blockUntilMillis: Long? = null,
+    /** Om en av appene er framme, etter det Snarveier har sagt. Brukes til å skille åpnet fra lukket. */
+    val foreground: Boolean = false,
+    /** Når Snarveier sist sa fra om at en app ble åpnet eller lukket. */
+    val lastEventMillis: Long = 0,
 )
 
 @Serializable
