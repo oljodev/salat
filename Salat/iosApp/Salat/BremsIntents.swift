@@ -25,9 +25,7 @@ enum BremsEvent: String, AppEnum {
 struct BremsIntent: AppIntent {
     static let title: LocalizedStringResource = "Brems"
     static let description = IntentDescription(
-        "Legg denne i en automasjon som kjører når en app åpnes. Skal appen vente eller er den sperret, åpnes Salat med en gang. " +
-            "Velg «Lukket» i en automasjon for når appene lukkes, så Brems kan måle tiden. " +
-            "«Sperr» sperrer alle appene i noen minutter, f.eks. fra en automasjon for et klokkeslett eller en fokusmodus."
+        "Legg denne i en automasjon som kjører når en app åpnes. Skal appen vente eller er den sperret, åpnes Salat med en gang. Velg «Lukket» i en automasjon for når appene lukkes, så Brems kan måle tiden. «Sperr» sperrer alle appene i noen minutter, f.eks. fra en automasjon for et klokkeslett eller en fokusmodus."
     )
     static let supportedModes: IntentModes = [.background, .foreground(.dynamic)]
 
