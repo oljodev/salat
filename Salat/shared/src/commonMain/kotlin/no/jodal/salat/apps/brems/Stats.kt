@@ -46,6 +46,8 @@ data class RangeStats(
     val longestSession: Session?,
     /** Økter som gikk over grensen. */
     val overLimit: Int,
+    /** De siste øktene i perioden, nyeste først. */
+    val recentSessions: List<Session> = emptyList(),
 ) {
     val averageMillis: Long get() = totalMillis / range.days
 
@@ -109,6 +111,7 @@ fun BremsData.stats(range: StatsRange, now: Long, zone: TimeZone): RangeStats {
         averageSessionMillis = if (rangeSessions.isEmpty()) 0 else rangeSessions.sumOf { it.millis } / rangeSessions.size,
         longestSession = rangeSessions.maxByOrNull { it.millis },
         overLimit = rangeSessions.count { it.millis >= limit },
+        recentSessions = rangeSessions.sortedByDescending { it.startMillis }.take(RecentSessions),
     )
 }
 
@@ -118,3 +121,6 @@ fun RangeStats.peakHour(): Int? = hourly.indices.maxByOrNull { hourly[it] }?.tak
 /** Ukedagen med mest bruk, 0 for mandag, eller `null`. */
 fun RangeStats.peakWeekday(): Int? = weekdays.indices.maxByOrNull { weekdays[it] }?.takeIf { weekdays[it] > 0f }
 
+
+/** Så mange av de siste øktene vises i statistikken. */
+const val RecentSessions = 30

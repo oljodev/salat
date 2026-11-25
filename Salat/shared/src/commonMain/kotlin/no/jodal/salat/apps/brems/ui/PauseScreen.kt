@@ -64,6 +64,7 @@ import no.jodal.salat.apps.brems.describeBlock
 import no.jodal.salat.apps.brems.appName
 import no.jodal.salat.apps.brems.appUrl
 import no.jodal.salat.apps.brems.formatDuration
+import no.jodal.salat.apps.brems.formatPrecise
 import no.jodal.salat.apps.brems.formatMinutes
 import no.jodal.salat.apps.brems.goalStatus
 import no.jodal.salat.apps.brems.reachedGoal
@@ -122,7 +123,7 @@ fun PauseScreen(store: BremsStore, pause: Pause, onLeave: () -> Unit) {
                     if (store.data.settings.showUsage) {
                         val today = store.data.usageToday(now, TimeZone.currentSystemDefault())
                         Text(
-                            "${today.opens}. gang i dag  ·  ${formatDuration(today.millis)}",
+                            "${today.opens}. gang i dag  ·  ${formatPrecise(today.millis)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = Night.Dim,
                         )

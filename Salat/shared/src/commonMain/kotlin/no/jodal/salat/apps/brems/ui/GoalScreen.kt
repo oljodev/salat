@@ -50,6 +50,7 @@ import no.jodal.salat.apps.brems.DayResult
 import no.jodal.salat.apps.brems.Goal
 import no.jodal.salat.apps.brems.GoalStatus
 import no.jodal.salat.apps.brems.formatDuration
+import no.jodal.salat.apps.brems.formatPrecise
 import no.jodal.salat.apps.brems.hardGoalReached
 import no.jodal.salat.apps.brems.label
 import no.jodal.salat.apps.brems.today
@@ -87,9 +88,9 @@ fun GoalCard(status: GoalStatus, onClick: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Row {
-            Text("${formatDuration(used)} i dag", style = MaterialTheme.typography.labelMedium, color = palette.textDim, modifier = Modifier.weight(1f))
+            Text("${formatPrecise(used)} i dag", style = MaterialTheme.typography.labelMedium, color = palette.textDim, modifier = Modifier.weight(1f))
             Text(
-                if (over >= 0) "${formatDuration(over)} over" else "${formatDuration(-over)} igjen",
+                if (over >= 0) "${formatPrecise(over)} over" else "${formatPrecise(-over)} igjen",
                 style = MaterialTheme.typography.labelMedium,
                 color = if (over >= 0) palette.warn else palette.textDim,
             )

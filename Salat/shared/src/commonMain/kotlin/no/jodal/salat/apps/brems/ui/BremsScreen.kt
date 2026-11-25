@@ -74,6 +74,7 @@ import no.jodal.salat.apps.brems.formatUntil
 import no.jodal.salat.apps.brems.appName
 import no.jodal.salat.apps.brems.formatDay
 import no.jodal.salat.apps.brems.formatDuration
+import no.jodal.salat.apps.brems.formatPrecise
 import no.jodal.salat.apps.brems.goalStatus
 import no.jodal.salat.apps.brems.hourlyMinutes
 import no.jodal.salat.apps.brems.today
@@ -296,13 +297,18 @@ private fun TodayCard(today: DayUsage, before: DayUsage, store: BremsStore, now:
         }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            val minutes = today.millis / 60_000
+            val seconds = today.millis / 1000
+            val minutes = seconds / 60
             if (minutes >= 60) {
                 BigNumber("${minutes / 60}")
                 UnitLabel("t")
             }
-            BigNumber("${minutes % 60}".let { if (minutes >= 60) it.padStart(2, '0') else it })
-            UnitLabel("min")
+            if (minutes > 0) {
+                BigNumber("${minutes % 60}".let { if (minutes >= 60) it.padStart(2, '0') else it })
+                UnitLabel("min")
+            }
+            BigNumber("${seconds % 60}".let { if (minutes > 0) it.padStart(2, '0') else it })
+            UnitLabel("s")
         }
         Comparison(today.millis, before.millis)
 
@@ -322,7 +328,7 @@ private fun TodayCard(today: DayUsage, before: DayUsage, store: BremsStore, now:
                     color = palette.text,
                     modifier = Modifier.padding(start = 10.dp).weight(1f),
                 )
-                Text(formatDuration(now - active.startMillis), style = MaterialTheme.typography.labelLarge, color = palette.textDim)
+                Text(formatPrecise(now - active.startMillis), style = MaterialTheme.typography.labelLarge, color = palette.textDim)
             }
         }
     }
@@ -352,8 +358,8 @@ private fun Comparison(today: Long, yesterday: Long) {
     }
     val diff = today - yesterday
     val text = when {
-        diff < 0 -> "${formatDuration(-diff)} mindre enn i går"
-        diff > 0 -> "${formatDuration(diff)} mer enn i går"
+        diff < 0 -> "${formatPrecise(-diff)} mindre enn i går"
+        diff > 0 -> "${formatPrecise(diff)} mer enn i går"
         else -> "Like mye som i går"
     }
     Text(text, style = MaterialTheme.typography.labelLarge, color = if (diff <= 0) TileColors.Teal else palette.warn)
@@ -465,7 +471,7 @@ private fun Apps(today: DayUsage) {
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        Text(formatDuration(millis), style = MaterialTheme.typography.labelLarge, color = palette.textDim)
+                        Text(formatPrecise(millis), style = MaterialTheme.typography.labelLarge, color = palette.textDim)
                     }
                     Spacer(Modifier.height(8.dp))
                     Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(palette.cardHigh)) {

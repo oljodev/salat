@@ -81,6 +81,25 @@ fun BremsData.usageToday(now: Long, zone: TimeZone): DayUsage = usageOn(today(no
 
 fun today(now: Long, zone: TimeZone): LocalDate = Instant.fromEpochMilliseconds(now).toLocalDateTime(zone).date
 
+/** Til sekundet: «42 s», «12 min 5 s», «1 t 5 min 12 s». */
+fun formatPrecise(millis: Long): String {
+    val seconds = millis.coerceAtLeast(0) / 1000
+    val h = seconds / 3600
+    val m = seconds / 60 % 60
+    val s = seconds % 60
+    return when {
+        h > 0 -> "$h t $m min $s s"
+        m > 0 -> "$m min $s s"
+        else -> "$s s"
+    }
+}
+
+/** Klokkeslettet til sekundet, f.eks. «21:43:07». */
+fun formatClock(millis: Long, zone: TimeZone): String {
+    val t = Instant.fromEpochMilliseconds(millis).toLocalDateTime(zone)
+    return "${t.hour.toString().padStart(2, '0')}:${t.minute.toString().padStart(2, '0')}:${t.second.toString().padStart(2, '0')}"
+}
+
 /** «47 min», «1 t 5 min», «0 min». */
 fun formatDuration(millis: Long): String {
     val minutes = millis / 60_000

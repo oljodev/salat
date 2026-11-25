@@ -31,7 +31,10 @@ import androidx.compose.material.icons.automirrored.rounded.TrendingFlat
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +62,11 @@ import no.jodal.salat.apps.brems.BremsStore
 import no.jodal.salat.apps.brems.PauseStats
 import no.jodal.salat.apps.brems.RangeStats
 import no.jodal.salat.apps.brems.StatsRange
+import no.jodal.salat.apps.brems.formatClock
+import no.jodal.salat.apps.brems.formatDay
 import no.jodal.salat.apps.brems.formatDuration
+import no.jodal.salat.apps.brems.formatPrecise
+import no.jodal.salat.apps.brems.today
 import no.jodal.salat.apps.brems.peakHour
 import no.jodal.salat.apps.brems.peakWeekday
 import no.jodal.salat.apps.brems.stats
@@ -91,13 +98,13 @@ fun StatsScreen(store: BremsStore, onBack: () -> Unit) {
 
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Tile(formatDuration(stats.totalMillis), "Totalt", Modifier.weight(1f))
+            Tile(formatPrecise(stats.totalMillis), "Totalt", Modifier.weight(1f))
             Tile("${stats.opens}", "Åpninger", Modifier.weight(1f))
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Tile(formatDuration(stats.averageSessionMillis), "Snitt per økt", Modifier.weight(1f))
-            Tile(stats.longestSession?.let { formatDuration(it.millis) } ?: "–", "Lengste økt", Modifier.weight(1f))
+            Tile(formatPrecise(stats.averageSessionMillis), "Snitt per økt", Modifier.weight(1f))
+            Tile(stats.longestSession?.let { formatPrecise(it.millis) } ?: "–", "Lengste økt", Modifier.weight(1f))
         }
 
         Section("Pausene")
@@ -112,6 +119,11 @@ fun StatsScreen(store: BremsStore, onBack: () -> Unit) {
         if (stats.apps.isNotEmpty()) {
             Section("Apper")
             Apps(stats)
+        }
+
+        if (stats.recentSessions.isNotEmpty()) {
+            Section("Siste økter")
+            Sessions(stats)
         }
 
         Section("Hvorfor du åpner")
@@ -164,7 +176,7 @@ private fun Overview(stats: RangeStats) {
     Card(padding = 20.dp) {
         Text("Snitt per dag", style = MaterialTheme.typography.titleSmall, color = palette.textDim)
         Spacer(Modifier.height(4.dp))
-        Text(formatDuration(stats.averageMillis), style = MaterialTheme.typography.displaySmall, color = palette.text)
+        Text(formatPrecise(stats.averageMillis), style = MaterialTheme.typography.displaySmall, color = palette.text)
         Spacer(Modifier.height(6.dp))
         Trend(stats)
         Spacer(Modifier.height(20.dp))
@@ -243,7 +255,13 @@ private fun DayBars(stats: RangeStats) {
 @Composable
 private fun Tile(value: String, label: String, modifier: Modifier) {
     Card(modifier, padding = 16.dp) {
-        Text(value, style = MaterialTheme.typography.headlineSmall, color = palette.text, maxLines = 1)
+        // Krymper teksten så lange tider til sekundet, som «1 t 6 min 40 s», får plass.
+        BasicText(
+            value,
+            style = MaterialTheme.typography.headlineSmall.copy(color = palette.text),
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 13.sp, maxFontSize = MaterialTheme.typography.headlineSmall.fontSize),
+        )
         Text(label, style = MaterialTheme.typography.bodySmall, color = palette.textDim)
     }
 }
@@ -427,7 +445,7 @@ private fun Apps(stats: RangeStats) {
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        Text(formatDuration(app.millis), style = MaterialTheme.typography.labelLarge, color = palette.text)
+                        Text(formatPrecise(app.millis), style = MaterialTheme.typography.labelLarge, color = palette.text)
                     }
                     Text(
                         "${(app.millis * 100 / total)} % av tiden  ·  ${app.opens} åpninger",
@@ -441,6 +459,46 @@ private fun Apps(stats: RangeStats) {
         }
     }
 }
+
+/** De siste øktene, med start og slutt til sekundet. */
+@Composable
+private fun Sessions(stats: RangeStats) {
+    val zone = TimeZone.currentSystemDefault()
+    Card {
+        stats.recentSessions.forEachIndexed { index, session ->
+            if (index > 0) RowDivider(inset = 66.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                AppAvatar(session.app)
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            session.app.ifEmpty { "Andre apper" },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = palette.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(formatPrecise(session.millis), style = MaterialTheme.typography.labelLarge, color = palette.text)
+                    }
+                    Text(
+                        "${formatShortDay(session.startMillis, zone)}  ·  ${formatClock(session.startMillis, zone)}–${formatClock(session.endMillis, zone)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.textDim,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatShortDay(millis: Long, zone: TimeZone): String =
+    formatDay(today(millis, zone)).split(' ').let { "${it[0].take(3)} ${it[1]} ${it[2].take(3)}" }
 
 /** Grunnene man har valgt i pausene, som liggende søyler. */
 @Composable
