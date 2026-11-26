@@ -226,7 +226,7 @@ private fun Waiting(store: BremsStore, pause: Pause, now: Long, remainingMillis:
 
         // Hvorfor pausen er lang: grensen for økta eller dagens mål.
         val reason = when (pause.kind) {
-            PauseKind.Limit -> "Forrige økt varte over ${formatMinutes(settings.limitMinutes)}."
+            PauseKind.Limit -> "Økta nådde grensen på ${formatMinutes(settings.limitMinutes)}."
             PauseKind.Goal -> store.data.reachedGoal(pause.app, now, zone)?.let { goal ->
                 val streak = store.data.goalStatus(goal, now, zone).bestStreak
                 "Du har brukt opp ${formatMinutes(goal.minutesPerDay)} for i dag." + if (streak > 1) " Beste rekke: $streak dager." else ""

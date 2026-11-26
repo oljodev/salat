@@ -78,6 +78,23 @@ fun GuideScreen(bridge: NativeBridge, store: BremsStore, onBack: () -> Unit) {
                 "eller er sperret. Pauser, mål, sperrer og sengetid stilles inn her i Brems.",
         )
 
+        Section("2", "Kastes ut ved grensen")
+        Card(padding = 20.dp) {
+            Steps(
+                listOf(
+                    "Lag en ny automasjon for de samme appene, men huk bare av **Er åpnet**. Velg **Kjør umiddelbart**.",
+                    "Legg til **Brems**, trykk på **Åpnet eller lukket** og velg **Tid til grensen**.",
+                    "Legg til **Vent** og dra resultatet fra Brems inn som antall sekunder.",
+                    "Legg til **Brems** en gang til og velg **Grensen nådd**.",
+                ),
+            )
+        }
+        Footnote(
+            "Er du fortsatt i appen når grensen per økt er nådd, hopper Salat fram med grensepausen, og appen er låst til den er over. " +
+                "Dette er et triks: iOS kan stoppe snarveier som venter lenge. Se i loggen nederst om det virker. " +
+                "Virker det ikke, kommer et varsel som før.",
+        )
+
         Spacer(Modifier.height(20.dp))
         Card(padding = 20.dp) {
             Text("Valgfritt", style = MaterialTheme.typography.titleMedium, color = palette.text)

@@ -63,6 +63,24 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
         scheduleNotices()
     }
 
+    /** Sekunder til grensen for økta, til «Vent» i Snarveier. */
+    fun secondsToLimit(): Int = BremsRules.secondsToLimit(data, nowMillis()).also { log("Venter ${formatSeconds(it)} på grensen") }
+
+    /** Snarveier har ventet til grensen. Gir `true` hvis økta er over grensen og Brems skal vise grensepausen. */
+    fun limitReached(): Boolean {
+        val now = nowMillis()
+        val before = data.active
+        val result = BremsRules.limitReached(data, now)
+        if (result == null) {
+            log(if (before == null) "Grensen: ingen app er åpen" else "Grensen: økta er ikke over grensen")
+            return false
+        }
+        update { result.first }
+        scheduleNotices()
+        log("${appName(before!!.app).replaceFirstChar { it.uppercase() }} over grensen etter ${formatPrecise(now - before.startMillis)}: grensepause")
+        return true
+    }
+
     /** «Sperret», «Pause» eller «Fri» for [app], uten å telle det som en åpning. */
     fun status(app: String?): String {
         val now = nowMillis()
@@ -118,7 +136,7 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
             val now = nowMillis()
             val zone = TimeZone.currentSystemDefault()
             val session = BremsRules.notifications(data.settings, active.app).map {
-                ScheduledNotice(it.title, it.body, active.startMillis + it.minutes * 60_000L)
+                ScheduledNotice(it.title, it.body, active.startMillis + it.minutes * 60_000L + it.seconds * 1000L)
             }
             // Et varsel når dagens mål for appen nås, hvis det skjer i denne økta. En hard grense maser litt etterpå.
             val goals = data.goals.filter { it.appliesTo(active.app) }.flatMap { goal ->
@@ -195,6 +213,12 @@ fun bremsEvent(bridge: NativeBridge, app: String?, salatActive: Boolean): Boolea
 
 /** Kalles fra Snarveier for å sperre alle appene i [minutes] minutter. */
 fun bremsBlock(bridge: NativeBridge, minutes: Int) = BremsStore.get(bridge).block(minutes)
+
+/** Kalles fra Snarveier før «Vent»: sekunder til grensen for økta. */
+fun bremsSecondsToLimit(bridge: NativeBridge): Int = BremsStore.get(bridge).secondsToLimit()
+
+/** Kalles fra Snarveier etter «Vent». Gir `true` hvis appen er over grensen og Brems skal vise grensepausen. */
+fun bremsLimitReached(bridge: NativeBridge): Boolean = BremsStore.get(bridge).limitReached()
 
 /** Kalles fra Snarveier: «Sperret», «Pause», «Fri» eller «Av». */
 fun bremsStatus(bridge: NativeBridge, app: String?): String = BremsStore.get(bridge).status(app)

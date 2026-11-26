@@ -127,4 +127,35 @@ class BremsRulesTest {
         assertEquals("1 minutt", formatSeconds(60))
         assertEquals("1 min 30 sek", formatSeconds(90))
     }
+
+    @Test
+    fun secondsToLimitCountsFromTheStartOfTheSession() {
+        assertEquals(600, BremsRules.secondsToLimit(BremsData(), start))
+        val data = BremsData(active = ActiveSession("TikTok", start))
+        assertEquals(540, BremsRules.secondsToLimit(data, start + 1 * min))
+        assertEquals(0, BremsRules.secondsToLimit(data, start + 11 * min))
+    }
+
+    @Test
+    fun limitReachedEndsTheSessionAndStartsTheLimitPause() {
+        val data = BremsData(active = ActiveSession("TikTok", start), foreground = true)
+        val now = start + 10 * min
+        val (next, pause) = BremsRules.limitReached(data, now, Random(1))!!
+        assertNull(next.active)
+        assertEquals(Session("TikTok", start, now), next.sessions.last())
+        assertEquals(PauseKind.Limit, pause.kind)
+        assertEquals(now + 60 * sec, pause.untilMillis)
+        // Åpner man appen igjen under pausen, er det samme pause.
+        val (_, decision) = open(next, "TikTok", now + 20 * sec)
+        assertEquals(pause, assertIs<Decision.Wait>(decision).pause)
+    }
+
+    @Test
+    fun limitReachedDoesNothingBeforeTheLimitOrWithoutASession() {
+        assertNull(BremsRules.limitReached(BremsData(), start))
+        val data = BremsData(active = ActiveSession("TikTok", start))
+        assertNull(BremsRules.limitReached(data, start + 5 * min))
+        // En ny økt som startet etter at Snarveier begynte å vente.
+        assertNull(BremsRules.limitReached(BremsData(active = ActiveSession("TikTok", start + 8 * min)), start + 10 * min))
+    }
 }

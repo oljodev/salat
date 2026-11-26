@@ -12,6 +12,8 @@ enum BremsEvent: String, AppEnum {
     case closed
     case block
     case status
+    case limitWait
+    case limit
 
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Hendelse"
     static let caseDisplayRepresentations: [BremsEvent: DisplayRepresentation] = [
@@ -20,6 +22,8 @@ enum BremsEvent: String, AppEnum {
         .closed: DisplayRepresentation(title: "Lukket", subtitle: "En app ble lukket, så Brems vet hvor lenge den var åpen."),
         .block: DisplayRepresentation(title: "Sperr", subtitle: "Sperr alle appene i noen minutter. Kan ikke oppheves."),
         .status: DisplayRepresentation(title: "Status", subtitle: "Gir «Sperret», «Pause», «Fri» eller «Av»."),
+        .limitWait: DisplayRepresentation(title: "Tid til grensen", subtitle: "Sekunder til økta når grensen. Legg til «Vent» etterpå."),
+        .limit: DisplayRepresentation(title: "Grensen nådd", subtitle: "Er appen fortsatt åpen over grensen, hopper Salat fram med grensepausen."),
     ]
 }
 
@@ -44,6 +48,8 @@ struct BremsIntent: AppIntent {
         Switch(\.$event) {
             Case(.block) { Summary("Brems: \(\.$event) i \(\.$minutes) minutter") }
             Case(.closed) { Summary("Brems: \(\.$event)") }
+            Case(.limitWait) { Summary("Brems: \(\.$event)") }
+            Case(.limit) { Summary("Brems: \(\.$event)") }
             DefaultCase { Summary("Brems: \(\.$event) \(\.$app)") }
         }
     }
@@ -73,6 +79,13 @@ struct BremsIntent: AppIntent {
             return .result(value: "Sperret")
         case .status:
             return .result(value: BremsStoreKt.bremsStatus(bridge: bridge, app: app))
+        case .limitWait:
+            return .result(value: String(BremsStoreKt.bremsSecondsToLimit(bridge: bridge)))
+        case .limit:
+            let result = await bremsOpened(app: nil, count: { BremsStoreKt.bremsLimitReached(bridge: bridge) }) {
+                try await continueInForeground(alwaysConfirm: false)
+            }
+            return .result(value: result)
         }
     }
 }

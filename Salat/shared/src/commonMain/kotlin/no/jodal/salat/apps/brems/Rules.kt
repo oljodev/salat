@@ -140,6 +140,40 @@ object BremsRules {
         }
     }
 
+    /** Så tidlig før grensen «Grensen nådd» likevel slår til, fordi «Vent» i Snarveier ikke er helt nøyaktig. */
+    const val LimitSlackMillis = 5_000L
+
+    /** Varselet om grensen kommer litt etter grensen, så det ikke kommer hvis Snarveier allerede har hentet fram Brems. */
+    const val LimitNoticeDelaySeconds = 20
+
+    /** Sekunder til økta som pågår, når grensen. Uten en økt (ennå): hele grensen. */
+    fun secondsToLimit(data: BremsData, now: Long): Int {
+        val limit = data.settings.limitMinutes * 60_000L
+        val active = data.active ?: return (limit / 1000).toInt()
+        return ((active.startMillis + limit - now + 999) / 1000).toInt().coerceAtLeast(0)
+    }
+
+    /**
+     * Fra Snarveier, etter at den har ventet til grensen. Er appen fortsatt åpen og over grensen, er økta over
+     * og grensepausen begynner. Gir `null` hvis det ikke er noe å gjøre.
+     */
+    fun limitReached(data: BremsData, now: Long, random: Random = Random): Pair<BremsData, Pause>? {
+        val settings = data.settings
+        val active = data.active ?: return null
+        if (!settings.enabled || settings.limitPauseSeconds <= 0) return null
+        if (now - active.startMillis < settings.limitMinutes * 60_000L - LimitSlackMillis) return null
+        val ended = endActive(resolve(data, PauseOutcome.Stopped), now)
+        val pause = Pause(
+            id = "p$now",
+            app = active.app,
+            kind = PauseKind.Limit,
+            startMillis = now,
+            untilMillis = now + settings.limitPauseSeconds * 1000L,
+            quote = settings.quotes.takeIf { settings.showQuote && it.isNotEmpty() }?.random(random),
+        )
+        return ended.copy(pauses = ended.pauses + pause, pass = null, foreground = false) to pause
+    }
+
     /** Pausen som pågår eller er ferdig, men ikke besvart. */
     fun currentPause(data: BremsData, now: Long): Pause? =
         data.pauses.lastOrNull()?.takeIf { it.outcome == null && now < it.untilMillis + PassMillis }
@@ -166,6 +200,7 @@ object BremsRules {
             settings.limitMinutes,
             "${formatMinutes(settings.limitMinutes).replaceFirstChar { it.uppercase() }}. Tid for en pause.",
             "Lukk $name og legg fra deg telefonen i ${formatSeconds(settings.limitPauseSeconds)}.",
+            seconds = LimitNoticeDelaySeconds,
         )
         if (settings.nagMinutes > 0) {
             for (after in NagAfterMinutes) {
@@ -207,9 +242,9 @@ object BremsRules {
     }
 }
 
-/** Et varsel [minutes] minutter ut i en økt. */
+/** Et varsel [minutes] minutter og [seconds] sekunder ut i en økt. */
 @Serializable
-data class SessionNotice(val minutes: Int, val title: String, val body: String)
+data class SessionNotice(val minutes: Int, val title: String, val body: String, val seconds: Int = 0)
 
 /** «1 sekund», «45 sekunder», «1 minutt», «1 min 30 sek». */
 fun formatSeconds(seconds: Int): String = when {
