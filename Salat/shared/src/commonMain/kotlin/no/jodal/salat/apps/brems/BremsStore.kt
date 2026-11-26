@@ -48,7 +48,7 @@ class BremsStore private constructor(private val bridge: NativeBridge) {
         val ended = before?.takeIf { data.active != it }
         if (ended != null) {
             scheduleNotices()
-            log("${appName(ended.app).replaceFirstChar { it.uppercase() }} lukket etter ${formatDuration(now - ended.startMillis)}")
+            log("${appName(ended.app).replaceFirstChar { it.uppercase() }} lukket etter ${formatPrecise(now - ended.startMillis)}")
         } else {
             log("Lukket")
         }
